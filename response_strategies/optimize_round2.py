@@ -7,6 +7,9 @@ Run indefinitely in the background from the project root::
 Inspect it with ``--status``.  The SQLite study, log, PID and best-parameter
 JSON are stored under ``response_strategies/optuna_state`` and ignored by Git.
 Stop a foreground worker with Ctrl+C.  A daemon can be stopped with ``--stop``.
+Use ``--run-best`` or ``--run-trial N`` to materialize a selected combination
+through ``main.py``: this writes the normal Output/ and Logs/ and opens the
+dashboard.
 """
 
 from __future__ import annotations
@@ -416,6 +419,87 @@ def show_status():
     print(f"Log: {LOG_PATH}")
 
 
+def _load_existing_study(optuna):
+    if not DATABASE_PATH.is_file():
+        raise SystemExit(
+            f"Optuna study not found: {DATABASE_PATH}. Start the optimizer first."
+        )
+    try:
+        return optuna.load_study(
+            study_name=STUDY_NAME,
+            storage=_storage_url(),
+        )
+    except KeyError as exc:
+        raise SystemExit(
+            f"Study {STUDY_NAME!r} does not exist in {DATABASE_PATH}."
+        ) from exc
+
+
+def _find_trial(study, trial_number):
+    for trial in study.get_trials(deepcopy=False):
+        if trial.number == trial_number:
+            return trial
+    raise SystemExit(
+        f"Trial {trial_number} does not exist in study {STUDY_NAME!r}."
+    )
+
+
+def run_materialized_trial(trial_number=None):
+    """Run one stored combination through main.py and open its dashboard."""
+    optuna = _require_optuna()
+    study = _load_existing_study(optuna)
+    if trial_number is None:
+        try:
+            trial = study.best_trial
+        except ValueError as exc:
+            raise SystemExit("The study does not have a completed trial yet.") from exc
+        selection = "best"
+    else:
+        trial = _find_trial(study, trial_number)
+        selection = "selected"
+
+    if not trial.params:
+        raise SystemExit(
+            f"Trial {trial.number} has no parameters and cannot be executed."
+        )
+
+    parameter_environment = _environment_from_parameters(trial.params)
+    child_environment = dict(os.environ)
+    child_environment.update(
+        {
+            name: "1" if value is True else "0" if value is False else str(value)
+            for name, value in parameter_environment.items()
+        }
+    )
+    child_environment["PYTHONUNBUFFERED"] = "1"
+
+    value = "not completed" if trial.value is None else f"{trial.value:.6f}"
+    print(
+        f"Running {selection} trial {trial.number}: "
+        f"state={trial.state.name}, stored_loss={value}",
+        flush=True,
+    )
+    print(f"Parameters: {trial.params}", flush=True)
+    print(
+        f"This run will replace the simulation CSVs in {PROJECT_ROOT / 'Output'}, "
+        "write a normal log under Logs/, and open the dashboard when complete.",
+        flush=True,
+    )
+
+    completed = subprocess.run(
+        [sys.executable, str(PROJECT_ROOT / "main.py")],
+        cwd=PROJECT_ROOT,
+        env=child_environment,
+        check=False,
+    )
+    if completed.returncode:
+        raise SystemExit(
+            f"Trial {trial.number} simulation failed with exit code "
+            f"{completed.returncode}."
+        )
+    return completed.returncode
+
+
 def stop_daemon():
     pid = _read_pid()
     if not _pid_is_running(pid):
@@ -432,6 +516,17 @@ def parse_arguments(argv=None):
     action.add_argument("--worker", action="store_true")
     action.add_argument("--status", action="store_true")
     action.add_argument("--stop", action="store_true")
+    action.add_argument(
+        "--run-best",
+        action="store_true",
+        help="Run the best stored combination, write Output/ and open dashboard.",
+    )
+    action.add_argument(
+        "--run-trial",
+        type=int,
+        metavar="NUMBER",
+        help="Run one stored trial, write Output/ and open dashboard.",
+    )
     parser.add_argument(
         "--trials",
         type=int,
@@ -449,6 +544,10 @@ def main(argv=None):
         stop_daemon()
     elif args.daemon:
         launch_daemon(args.trials)
+    elif args.run_best:
+        run_materialized_trial()
+    elif args.run_trial is not None:
+        run_materialized_trial(args.run_trial)
     else:
         run_worker(args.trials)
 
