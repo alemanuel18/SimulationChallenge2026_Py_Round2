@@ -37,6 +37,21 @@ _BERTHING_DAYS_PER_CALL = 3.0 / 24.0
 _KNOTS_TO_NM_PER_DAY = 24.0
 
 
+def _env_float(name, default, minimum=0.0, maximum=100.0):
+    try:
+        value = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        value = float(default)
+    return min(maximum, max(minimum, value))
+
+
+def _env_enabled(name, default=True):
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return raw.strip().casefold() not in {"0", "false", "no", "off"}
+
+
 @dataclass(frozen=True)
 class _Edge:
     route: object
@@ -89,6 +104,8 @@ def manage_service_routes(context, now, vessel=None):
         source_route = _source_route_for_leg(context, event.target_leg)
         if source_route is None:
             continue
+        if not _env_enabled(f"WSC_ENABLE_{source_route.id.upper()}_DETOUR", True):
+            continue
 
         start_day = float(event.start_offset_days)
         end_day = start_day + float(event.duration_days)
@@ -96,7 +113,12 @@ def manage_service_routes(context, now, vessel=None):
         # leg.  One normal traversal time plus a daily-manager margin is enough
         # to catch it at an earlier port call.
         speed = _route_speed(source_route)
-        lead_days = event.target_leg.sailing_distance / speed / 24.0 + 1.0
+        lead_margin = _env_float(
+            f"WSC_LEAD_MARGIN_{source_route.id.upper()}", 1.0, 0.0, 30.0
+        )
+        lead_days = (
+            event.target_leg.sailing_distance / speed / 24.0 + lead_margin
+        )
         now_day = _absolute_day(now)
         active = start_day - lead_days <= now_day < end_day
 
@@ -129,6 +151,11 @@ def manage_service_routes(context, now, vessel=None):
     for event in _unique_closed_port_events(context):
         closed_port = event.target_berth.port
         for source_route in context.initial_service_routes:
+            if (
+                source_route.id.casefold() == "s7"
+                and not _env_enabled("WSC_ENABLE_S7_SKIP", True)
+            ):
+                continue
             alternative = _find_port_skip_detour(
                 context, source_route, closed_port, event
             )
@@ -139,7 +166,10 @@ def manage_service_routes(context, now, vessel=None):
             if (
                 alternative is None
                 and source_route.id.casefold() == "s1"
-                and os.environ.get("WSC_S1_BYPASS", "0") == "1"
+                and _env_enabled(
+                    "WSC_ENABLE_S1_BYPASS",
+                    os.environ.get("WSC_S1_BYPASS", "0") == "1",
+                )
             ):
                 alternative = _create_s1_port_bypass(
                     context, source_route, closed_port, event
@@ -158,8 +188,14 @@ def manage_service_routes(context, now, vessel=None):
                 default=0.0,
             )
             now_day = _absolute_day(now)
+            port_lead_margin = _env_float(
+                f"WSC_PORT_LEAD_MARGIN_{source_route.id.upper()}",
+                1.0,
+                0.0,
+                30.0,
+            )
             active = (
-                event.start_offset_days - inbound_days - 1.0
+                event.start_offset_days - inbound_days - port_lead_margin
                 <= now_day
                 < event.start_offset_days + event.duration_days
             )
@@ -255,7 +291,10 @@ def select_vessel_for_berth(
             if shipment.generated_time is not None
         )
         # Waiting time dominates after a prolonged queue, preventing starvation.
-        return cargo_age_teu_hours + wait_hours * 10_000.0
+        starvation_weight = _env_float(
+            "WSC_BERTH_WAIT_WEIGHT", 10_000.0, 0.0, 50_000.0
+        )
+        return cargo_age_teu_hours + wait_hours * starvation_weight
 
     return max(
         enumerate(waiting_vessels),
@@ -844,9 +883,16 @@ def _detour_route_edges(source_route, detour):
 
 def _expected_edge_days(context, now, elapsed_before_edge, edge):
     route = edge.route
-    wait_weight = float(os.environ.get("WSC_WAIT_WEIGHT", "1.0"))
+    wait_weight = _env_float("WSC_WAIT_WEIGHT", 1.0, 0.0, 4.0)
+    wait_fraction = _env_float("WSC_WAIT_FRACTION", 0.5, 0.0, 1.5)
+    berth_call_days = _env_float(
+        "WSC_ESTIMATED_BERTH_CALL_DAYS",
+        _BERTHING_DAYS_PER_CALL,
+        0.0,
+        1.0,
+    )
     headway = _route_cycle_days(route) / max(1, _eventual_vessel_count(route))
-    elapsed = max(0.0, 0.5 * headway * wait_weight)
+    elapsed = max(0.0, wait_fraction * headway * wait_weight)
     departure_time = now + dt.timedelta(days=elapsed_before_edge + elapsed)
     elapsed += _closed_port_wait_days(context, edge.departure_port, departure_time)
 
@@ -858,15 +904,21 @@ def _expected_edge_days(context, now, elapsed_before_edge, edge):
         elapsed += leg.sailing_distance / speed / 24.0 * multiplier
         arrival_time = now + dt.timedelta(days=elapsed_before_edge + elapsed)
         elapsed += _closed_port_wait_days(context, leg.arrival_port, arrival_time)
-        elapsed += _BERTHING_DAYS_PER_CALL
+        elapsed += berth_call_days
     return elapsed
 
 
 def _route_cycle_days(route):
     speed = _route_speed(route)
+    berth_call_days = _env_float(
+        "WSC_ESTIMATED_BERTH_CALL_DAYS",
+        _BERTHING_DAYS_PER_CALL,
+        0.0,
+        1.0,
+    )
     return sum(
         segment.associated_leg.sailing_distance / speed / 24.0
-        + _BERTHING_DAYS_PER_CALL
+        + berth_call_days
         for segment in route.segments
     )
 
