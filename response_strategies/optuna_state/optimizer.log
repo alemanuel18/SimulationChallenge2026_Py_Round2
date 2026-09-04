@@ -1,0 +1,11 @@
+/home/alemanuel/Documents/Universidad/6°Semestre/SimulationChallenge2026/SimulationChallenge2026_Py_Round2/response_strategies/optimize_round2.py:276: ExperimentalWarning: Argument ``multivariate`` is an experimental feature. The interface can change in the future.
+  sampler=optuna.samplers.TPESampler(
+[I 2026-09-04 10:48:34,297] Using an existing study with name 'wsc_round2_loss' instead of creating a new one.
+best trial=0 loss=12.395074 params={'wait_fraction': 0.5, 'berth_call_days': 0.125, 'lead_margin_s5': 1.0, 'lead_margin_s4': 1.0, 'lead_margin_s9': 1.0, 'enable_s4_detour': True, 'enable_s9_detour': True, 'enable_s7_skip': True, 'enable_s1_bypass': False}
+Starting study 'wsc_round2_loss'; trials=unlimited; storage=/home/alemanuel/Documents/Universidad/6°Semestre/SimulationChallenge2026/SimulationChallenge2026_Py_Round2/response_strategies/optuna_state/round2.db
+/home/alemanuel/Documents/Universidad/6°Semestre/SimulationChallenge2026/SimulationChallenge2026_Py_Round2/response_strategies/optimize_round2.py:317: ExperimentalWarning: Argument ``multivariate`` is an experimental feature. The interface can change in the future.
+  sampler=optuna.samplers.TPESampler(
+[I 2026-09-04 12:30:40,162] Using an existing study with name 'wsc_round2_loss' instead of creating a new one.
+Recovered interrupted trial 3.
+best trial=0 loss=12.395074 params={'wait_fraction': 0.5, 'berth_call_days': 0.125, 'lead_margin_s5': 1.0, 'lead_margin_s4': 1.0, 'lead_margin_s9': 1.0, 'enable_s4_detour': True, 'enable_s9_detour': True, 'enable_s7_skip': True, 'enable_s1_bypass': False}
+Starting study 'wsc_round2_loss'; trials=unlimited; storage=/home/alemanuel/Documents/Universidad/6°Semestre/SimulationChallenge2026/SimulationChallenge2026_Py_Round2/response_strategies/optuna_state/round2.db
