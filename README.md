@@ -138,8 +138,8 @@ disrupciones, permite que la estrategia por defecto actúe como *fallback*.
 El resultado validado actualmente es:
 
 * `Loss` original: **34.574028**.
-* `Loss` de la estrategia actual: **12.395074**.
-* Reducción obtenida: aproximadamente **64.1 %**.
+* `Loss` de la estrategia actual: **3.295500**.
+* Reducción obtenida: aproximadamente **90.5 %**.
 
 La estrategia combina cuatro mecanismos:
 
@@ -147,10 +147,11 @@ La estrategia combina cuatro mecanismos:
    en cuenta frecuencia del servicio, espera estimada para embarcar,
    transbordos, tiempo de navegación, escalas, cierres portuarios y
    multiplicadores activos o futuros.
-2. **Desvíos preventivos de flota completa.** Antes de las disrupciones de los
-   tramos Colombo–New Jersey (`S5`), Shanghai–Kaohsiung (`S4`) y
-   Qingdao–Busan (`S9`), mueve la flota afectada a ciclos alternativos válidos.
-   Cuando termina el evento, restaura la ruta original y sus reservas.
+2. **Desvío preventivo de flota completa.** Antes de la disrupción del tramo
+   Colombo–New Jersey (`S5`), mueve la flota afectada a un ciclo alternativo
+   válido. Cuando termina el evento, restaura la ruta original y sus reservas.
+   Optuna determinó que los desvíos `S4` y `S9` deben permanecer desactivados
+   en la configuración ganadora.
 3. **Tratamiento de Piraeus.** Durante el cierre, `S7` omite Piraeus mediante
    un ciclo conectado y más corto. El bypass de `S1` existe como experimento,
    pero está desactivado en la configuración validada porque su recorrido es
@@ -270,7 +271,7 @@ La búsqueda no incrementa las variables paso a paso. Utiliza el sampler TPE
 (*Tree-structured Parzen Estimator*) de Optuna con semilla `2026` y modo
 multivariable:
 
-1. El estudio comienza con la combinación ya validada de `Loss 12.395074` y
+1. El estudio comienza con la combinación ya validada de `Loss 3.295500` y
    una prueba estructural de bypass de `S1` puesta en cola.
 2. Hasta reunir suficientes observaciones, explora valores distribuidos por
    los rangos configurados. Las variables continuas pueden tomar cualquier

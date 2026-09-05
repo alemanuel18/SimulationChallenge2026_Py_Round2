@@ -36,7 +36,7 @@ LOG_PATH = STATE_DIRECTORY / "optimizer.log"
 PID_PATH = STATE_DIRECTORY / "optimizer.pid"
 BASELINE_PATH = PROJECT_ROOT / "Output" / "Baseline_ATT_By_Statistics_Interval.csv"
 STUDY_NAME = "wsc_round2_loss"
-KNOWN_BEST_LOSS = 12.395073988811255
+KNOWN_BEST_LOSS = 3.295500192581237
 
 
 def _require_optuna():
@@ -198,16 +198,16 @@ def _objective_factory(optuna, baseline_periods):
 
 def _known_parameters():
     return {
-        "wait_fraction": 0.5,
-        "berth_call_days": 0.125,
-        "lead_margin_s5": 1.0,
-        "lead_margin_s4": 1.0,
-        "lead_margin_s9": 1.0,
-        "port_lead_margin_s7": 1.0,
-        "port_lead_margin_s1": 1.0,
-        "berth_wait_weight": 10_000.0,
-        "enable_s4_detour": True,
-        "enable_s9_detour": True,
+        "wait_fraction": 0.932682014844758,
+        "berth_call_days": 0.2143979900583058,
+        "lead_margin_s5": 8.905983046556884,
+        "lead_margin_s4": 1.0129921282683818,
+        "lead_margin_s9": 4.660638795739538,
+        "port_lead_margin_s7": 1.5186231710926994,
+        "port_lead_margin_s1": 4.661366835539739,
+        "berth_wait_weight": 12994.122976779254,
+        "enable_s4_detour": False,
+        "enable_s9_detour": False,
         "enable_s7_skip": True,
         "enable_s1_bypass": False,
     }

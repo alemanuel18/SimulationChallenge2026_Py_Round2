@@ -1,33 +1,36 @@
 {
   "environment": {
-    "WSC_BERTH_WAIT_WEIGHT": 10000.0,
+    "WSC_BERTH_WAIT_WEIGHT": 12994.122976779254,
     "WSC_ENABLE_S1_BYPASS": false,
-    "WSC_ENABLE_S4_DETOUR": true,
+    "WSC_ENABLE_S4_DETOUR": false,
     "WSC_ENABLE_S5_DETOUR": true,
     "WSC_ENABLE_S7_SKIP": true,
-    "WSC_ENABLE_S9_DETOUR": true,
-    "WSC_ESTIMATED_BERTH_CALL_DAYS": 0.125,
-    "WSC_LEAD_MARGIN_S4": 1.0,
-    "WSC_LEAD_MARGIN_S5": 1.0,
-    "WSC_LEAD_MARGIN_S9": 1.0,
-    "WSC_PORT_LEAD_MARGIN_S1": 1.0,
-    "WSC_PORT_LEAD_MARGIN_S7": 1.0,
+    "WSC_ENABLE_S9_DETOUR": false,
+    "WSC_ESTIMATED_BERTH_CALL_DAYS": 0.2143979900583058,
+    "WSC_LEAD_MARGIN_S4": 1.0129921282683818,
+    "WSC_LEAD_MARGIN_S5": 8.905983046556884,
+    "WSC_LEAD_MARGIN_S9": 4.660638795739538,
+    "WSC_PORT_LEAD_MARGIN_S1": 4.661366835539739,
+    "WSC_PORT_LEAD_MARGIN_S7": 1.5186231710926994,
     "WSC_ROUND2_MODE": "detour",
-    "WSC_WAIT_FRACTION": 0.5
+    "WSC_WAIT_FRACTION": 0.932682014844758
   },
-  "loss": 12.395073988811255,
+  "loss": 3.295500192581237,
   "parameters": {
-    "berth_call_days": 0.125,
+    "berth_call_days": 0.2143979900583058,
+    "berth_wait_weight": 12994.122976779254,
     "enable_s1_bypass": false,
-    "enable_s4_detour": true,
+    "enable_s4_detour": false,
     "enable_s7_skip": true,
-    "enable_s9_detour": true,
-    "lead_margin_s4": 1.0,
-    "lead_margin_s5": 1.0,
-    "lead_margin_s9": 1.0,
-    "wait_fraction": 0.5
+    "enable_s9_detour": false,
+    "lead_margin_s4": 1.0129921282683818,
+    "lead_margin_s5": 8.905983046556884,
+    "lead_margin_s9": 4.660638795739538,
+    "port_lead_margin_s1": 4.661366835539739,
+    "port_lead_margin_s7": 1.5186231710926994,
+    "wait_fraction": 0.932682014844758
   },
   "study": "wsc_round2_loss",
-  "trial": 0,
-  "updated_at": "2026-09-04T12:30:40"
+  "trial": 12,
+  "updated_at": "2026-09-04T22:27:50"
 }

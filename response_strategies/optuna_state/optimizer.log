@@ -9,3 +9,7 @@ Starting study 'wsc_round2_loss'; trials=unlimited; storage=/home/alemanuel/Docu
 Recovered interrupted trial 3.
 best trial=0 loss=12.395074 params={'wait_fraction': 0.5, 'berth_call_days': 0.125, 'lead_margin_s5': 1.0, 'lead_margin_s4': 1.0, 'lead_margin_s9': 1.0, 'enable_s4_detour': True, 'enable_s9_detour': True, 'enable_s7_skip': True, 'enable_s1_bypass': False}
 Starting study 'wsc_round2_loss'; trials=unlimited; storage=/home/alemanuel/Documents/Universidad/6°Semestre/SimulationChallenge2026/SimulationChallenge2026_Py_Round2/response_strategies/optuna_state/round2.db
+trial=4 day=60 partial_loss=-0.210741 elapsed=249.4s
+trial=4 day=120 partial_loss=-0.305952 elapsed=338.7s
+trial=4 day=180 partial_loss=1.477253 elapsed=434.3s
+trial=4 day=240 partial_loss=1.984616 elapsed=537.1s
