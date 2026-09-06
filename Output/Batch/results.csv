@@ -1,0 +1,2 @@
+trial,label,WSC_CLOSURE_SLACK_DAYS,WSC_MAX_TRANSFERS,WSC_QUEUE_WEIGHT,WSC_TRANSFER_BUFFER_HOURS,WSC_WAIT_WEIGHT,seeds,days,att_mean,att_stdev,att_worst,objective,seconds
+1,default,1.0,3,1.0,12.0,1.0,2026,10,11.8803,0.0,11.8803,11.8803,909.0
