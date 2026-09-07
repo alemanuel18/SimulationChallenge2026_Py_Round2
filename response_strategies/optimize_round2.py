@@ -10,6 +10,7 @@ Stop a foreground worker with Ctrl+C.  A daemon can be stopped with ``--stop``.
 Use ``--run-best`` or ``--run-trial N`` to materialize a selected combination
 through ``main.py``: this writes the normal Output/ and Logs/ and opens the
 dashboard.
+Use ``--best-history`` to inspect the chronological record of improvements.
 """
 
 from __future__ import annotations
@@ -419,6 +420,67 @@ def show_status():
     print(f"Log: {LOG_PATH}")
 
 
+def show_best_history(limit=10):
+    """Print the latest trials that established a new minimum Loss."""
+    if limit <= 0:
+        raise SystemExit("The best-history limit must be greater than zero.")
+
+    optuna = _require_optuna()
+    study = _load_existing_study(optuna)
+    completed = sorted(
+        (
+            trial
+            for trial in study.get_trials(deepcopy=False)
+            if trial.state == optuna.trial.TrialState.COMPLETE
+            and trial.value is not None
+        ),
+        key=lambda trial: trial.number,
+    )
+
+    records = []
+    previous_best = None
+    for trial in completed:
+        if previous_best is None or trial.value < previous_best:
+            improvement = (
+                None if previous_best is None else previous_best - trial.value
+            )
+            records.append((trial, improvement))
+            previous_best = trial.value
+
+    selected = records[-limit:]
+    print(
+        f"Best-loss history: showing {len(selected)} of {len(records)} "
+        f"record improvements (requested {limit})."
+    )
+    if not selected:
+        print("No completed trials are available.")
+        return
+
+    for trial, improvement in selected:
+        completed_at = (
+            trial.datetime_complete.isoformat(timespec="seconds")
+            if trial.datetime_complete is not None
+            else "unknown"
+        )
+        improvement_text = (
+            "initial record"
+            if improvement is None
+            else f"improved by {improvement:.6f}"
+        )
+        runtime = trial.user_attrs.get("runtime_seconds")
+        runtime_text = "unknown" if runtime is None else f"{runtime:.1f}s"
+        print(
+            f"trial={trial.number} loss={trial.value:.6f} "
+            f"{improvement_text} completed={completed_at} runtime={runtime_text}"
+        )
+        print(
+            "  params: "
+            + ", ".join(
+                f"{name}={value}" for name, value in trial.params.items()
+            )
+        )
+
+
 def _load_existing_study(optuna):
     if not DATABASE_PATH.is_file():
         raise SystemExit(
@@ -517,6 +579,15 @@ def parse_arguments(argv=None):
     action.add_argument("--status", action="store_true")
     action.add_argument("--stop", action="store_true")
     action.add_argument(
+        "--best-history",
+        nargs="?",
+        type=int,
+        const=10,
+        default=None,
+        metavar="LIMIT",
+        help="Show the latest record-breaking trials (default: 10).",
+    )
+    action.add_argument(
         "--run-best",
         action="store_true",
         help="Run the best stored combination, write Output/ and open dashboard.",
@@ -540,6 +611,8 @@ def main(argv=None):
     args = parse_arguments(argv)
     if args.status:
         show_status()
+    elif args.best_history is not None:
+        show_best_history(args.best_history)
     elif args.stop:
         stop_daemon()
     elif args.daemon:

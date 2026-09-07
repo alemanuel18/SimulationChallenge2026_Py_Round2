@@ -209,6 +209,24 @@ Consultar el estado y el mejor resultado encontrado:
 .venv/bin/python response_strategies/optimize_round2.py --status
 ```
 
+Mostrar las últimas diez corridas que establecieron un nuevo mínimo de
+`Loss`, en orden cronológico:
+
+```bash
+.venv/bin/python response_strategies/optimize_round2.py --best-history
+```
+
+Para solicitar otra cantidad de mejoras, por ejemplo las últimas veinte:
+
+```bash
+.venv/bin/python response_strategies/optimize_round2.py --best-history 20
+```
+
+Este historial no muestra simplemente los diez valores más bajos: conserva
+solo los ensayos que, al terminar, superaron el mejor `Loss` conocido hasta ese
+momento. Para cada uno imprime el número de `trial`, el `Loss`, la mejora frente
+al récord anterior, fecha, duración y combinación de parámetros.
+
 Detener el proceso:
 
 ```bash
