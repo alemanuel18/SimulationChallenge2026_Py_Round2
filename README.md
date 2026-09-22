@@ -138,8 +138,8 @@ disrupciones, permite que la estrategia por defecto actúe como *fallback*.
 El resultado validado actualmente es:
 
 * `Loss` original: **34.574028**.
-* `Loss` de la estrategia actual: **3.295500**.
-* Reducción obtenida: aproximadamente **90.5 %**.
+* `Loss` de la estrategia actual: **0.614422** (`trial 20`).
+* Reducción obtenida: aproximadamente **98.2 %**.
 
 La estrategia combina cuatro mecanismos:
 
@@ -147,15 +147,12 @@ La estrategia combina cuatro mecanismos:
    en cuenta frecuencia del servicio, espera estimada para embarcar,
    transbordos, tiempo de navegación, escalas, cierres portuarios y
    multiplicadores activos o futuros.
-2. **Desvío preventivo de flota completa.** Antes de la disrupción del tramo
-   Colombo–New Jersey (`S5`), mueve la flota afectada a un ciclo alternativo
-   válido. Cuando termina el evento, restaura la ruta original y sus reservas.
-   Optuna determinó que los desvíos `S4` y `S9` deben permanecer desactivados
-   en la configuración ganadora.
-3. **Tratamiento de Piraeus.** Durante el cierre, `S7` omite Piraeus mediante
-   un ciclo conectado y más corto. El bypass de `S1` existe como experimento,
-   pero está desactivado en la configuración validada porque su recorrido es
-   considerablemente mayor.
+2. **Desvíos preventivos de flota completa.** La configuración base activa
+   los ciclos alternativos de `S4` y `S5`, y mantiene desactivado `S9`. Cuando
+   termina cada evento, restaura la ruta original y sus reservas.
+3. **Tratamiento de Piraeus.** Los bypass de `S7` y `S1` existen como
+   alternativas experimentales, pero ambos permanecen desactivados en la
+   configuración base del `trial 20`.
 4. **Prioridad de atraque.** Ordena los buques usando los TEU-hora acumulados
    por la carga y el tiempo esperando atraque, evitando dejar indefinidamente
    un buque en cola.
@@ -271,6 +268,14 @@ espera para atraque y activación de las alternativas `S4`, `S9`, `S7` y `S1`.
 El desvío `S5` se conserva siempre porque evita el retraso conocido más
 costoso del escenario.
 
+La búsqueda automática usa el estudio independiente
+`wsc_round2_positive_loss`. Solamente un `Loss` final estrictamente mayor que
+cero puede competir como mejor resultado. Si una corrida termina con `Loss`
+igual o menor que cero, se conserva su `raw_loss` para auditoría, pero Optuna
+recibe una penalización de `1,000,000 + abs(raw_loss)` para impedir que esa
+combinación domine la búsqueda. El estudio histórico anterior permanece en la
+misma base SQLite y no se elimina.
+
 Los archivos generados se guardan en `response_strategies/optuna_state/`:
 
 * `round2.db`: estudio SQLite con todos los ensayos.
@@ -289,7 +294,7 @@ La búsqueda no incrementa las variables paso a paso. Utiliza el sampler TPE
 (*Tree-structured Parzen Estimator*) de Optuna con semilla `2026` y modo
 multivariable:
 
-1. El estudio comienza con la combinación ya validada de `Loss 3.295500` y
+1. El estudio comienza con la combinación ya validada de `Loss 0.614422` y
    una prueba estructural de bypass de `S1` puesta en cola.
 2. Hasta reunir suficientes observaciones, explora valores distribuidos por
    los rangos configurados. Las variables continuas pueden tomar cualquier

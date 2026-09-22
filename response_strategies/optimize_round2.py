@@ -36,8 +36,9 @@ BEST_PATH = STATE_DIRECTORY / "best.json"
 LOG_PATH = STATE_DIRECTORY / "optimizer.log"
 PID_PATH = STATE_DIRECTORY / "optimizer.pid"
 BASELINE_PATH = PROJECT_ROOT / "Output" / "Baseline_ATT_By_Statistics_Interval.csv"
-STUDY_NAME = "wsc_round2_loss"
-KNOWN_BEST_LOSS = 3.295500192581237
+STUDY_NAME = "wsc_round2_positive_loss"
+KNOWN_BEST_LOSS = 0.6144223121391709
+NON_POSITIVE_LOSS_PENALTY = 1_000_000.0
 
 
 def _require_optuna():
@@ -110,26 +111,57 @@ def _suggest_parameters(trial):
 def _apply_parameters(parameters):
     environment = {
         "WSC_ROUND2_MODE": "detour",
-        "WSC_WAIT_FRACTION": parameters.get("wait_fraction", 0.5),
-        "WSC_ESTIMATED_BERTH_CALL_DAYS": parameters.get(
-            "berth_call_days", 0.125
+        "WSC_WAIT_FRACTION": parameters.get(
+            "wait_fraction", 0.7801957406282308
         ),
-        "WSC_LEAD_MARGIN_S5": parameters.get("lead_margin_s5", 1.0),
-        "WSC_LEAD_MARGIN_S4": parameters.get("lead_margin_s4", 1.0),
-        "WSC_LEAD_MARGIN_S9": parameters.get("lead_margin_s9", 1.0),
-        "WSC_PORT_LEAD_MARGIN_S7": parameters.get("port_lead_margin_s7", 1.0),
-        "WSC_PORT_LEAD_MARGIN_S1": parameters.get("port_lead_margin_s1", 1.0),
-        "WSC_BERTH_WAIT_WEIGHT": parameters.get("berth_wait_weight", 10_000.0),
+        "WSC_ESTIMATED_BERTH_CALL_DAYS": parameters.get(
+            "berth_call_days", 0.334316796877574
+        ),
+        "WSC_LEAD_MARGIN_S5": parameters.get(
+            "lead_margin_s5", 9.994766349122587
+        ),
+        "WSC_LEAD_MARGIN_S4": parameters.get(
+            "lead_margin_s4", 1.7919450471544445
+        ),
+        "WSC_LEAD_MARGIN_S9": parameters.get(
+            "lead_margin_s9", 4.965248916465518
+        ),
+        "WSC_PORT_LEAD_MARGIN_S7": parameters.get(
+            "port_lead_margin_s7", 0.008721596207972346
+        ),
+        "WSC_PORT_LEAD_MARGIN_S1": parameters.get(
+            "port_lead_margin_s1", 3.3327872613451546
+        ),
+        "WSC_BERTH_WAIT_WEIGHT": parameters.get(
+            "berth_wait_weight", 3612.197176310383
+        ),
         # S5's 75-day avoided delay makes its detour non-negotiable.
         "WSC_ENABLE_S5_DETOUR": True,
         "WSC_ENABLE_S4_DETOUR": parameters.get("enable_s4_detour", True),
-        "WSC_ENABLE_S9_DETOUR": parameters.get("enable_s9_detour", True),
-        "WSC_ENABLE_S7_SKIP": parameters.get("enable_s7_skip", True),
+        "WSC_ENABLE_S9_DETOUR": parameters.get("enable_s9_detour", False),
+        "WSC_ENABLE_S7_SKIP": parameters.get("enable_s7_skip", False),
         "WSC_ENABLE_S1_BYPASS": parameters.get("enable_s1_bypass", False),
     }
     for name, value in environment.items():
         os.environ[name] = "1" if value is True else "0" if value is False else str(value)
     return environment
+
+
+def _positive_loss_objective_value(trial, raw_loss):
+    """Exclude zero/negative Loss values from the minimization objective."""
+    trial.set_user_attr("raw_loss", raw_loss)
+    excluded = raw_loss <= 0
+    trial.set_user_attr("excluded_non_positive_loss", excluded)
+    if not excluded:
+        return raw_loss
+
+    penalized_value = NON_POSITIVE_LOSS_PENALTY + abs(raw_loss)
+    print(
+        f"trial={trial.number} raw_loss={raw_loss:.6f} "
+        f"excluded_non_positive penalty={penalized_value:.6f}",
+        flush=True,
+    )
+    return penalized_value
 
 
 def _objective_factory(optuna, baseline_periods):
@@ -192,31 +224,31 @@ def _objective_factory(optuna, baseline_periods):
                 )
 
         trial.set_user_attr("runtime_seconds", time.perf_counter() - started)
-        return cumulative_loss
+        return _positive_loss_objective_value(trial, cumulative_loss)
 
     return objective
 
 
 def _known_parameters():
     return {
-        "wait_fraction": 0.932682014844758,
-        "berth_call_days": 0.2143979900583058,
-        "lead_margin_s5": 8.905983046556884,
-        "lead_margin_s4": 1.0129921282683818,
-        "lead_margin_s9": 4.660638795739538,
-        "port_lead_margin_s7": 1.5186231710926994,
-        "port_lead_margin_s1": 4.661366835539739,
-        "berth_wait_weight": 12994.122976779254,
-        "enable_s4_detour": False,
+        "wait_fraction": 0.7801957406282308,
+        "berth_call_days": 0.334316796877574,
+        "lead_margin_s5": 9.994766349122587,
+        "lead_margin_s4": 1.7919450471544445,
+        "lead_margin_s9": 4.965248916465518,
+        "port_lead_margin_s7": 0.008721596207972346,
+        "port_lead_margin_s1": 3.3327872613451546,
+        "berth_wait_weight": 3612.197176310383,
+        "enable_s4_detour": True,
         "enable_s9_detour": False,
-        "enable_s7_skip": True,
+        "enable_s7_skip": False,
         "enable_s1_bypass": False,
     }
 
 
 def _ensure_known_best(optuna, study):
-    if study.trials:
-        return
+    study_was_empty = not study.trials
+    known_parameters = _known_parameters()
     distributions = {
         "wait_fraction": optuna.distributions.FloatDistribution(0.10, 1.00),
         "berth_call_days": optuna.distributions.FloatDistribution(0.00, 0.35),
@@ -241,18 +273,35 @@ def _ensure_known_best(optuna, study):
             [False, True]
         ),
     }
-    study.add_trial(
-        optuna.trial.create_trial(
-            params=_known_parameters(),
-            distributions=distributions,
-            value=KNOWN_BEST_LOSS,
-            user_attrs={"source": "validated deterministic run"},
-        )
+    known_best_is_registered = any(
+        trial.state == optuna.trial.TrialState.COMPLETE
+        and trial.value is not None
+        and abs(trial.value - KNOWN_BEST_LOSS) < 1e-12
+        and trial.params == known_parameters
+        for trial in study.trials
     )
-    # Resume the interrupted high-value structural experiment first.
-    s1_trial = dict(_known_parameters())
-    s1_trial["enable_s1_bypass"] = True
-    study.enqueue_trial(s1_trial, user_attrs={"source": "queued S1 comparison"})
+    if not known_best_is_registered:
+        study.add_trial(
+            optuna.trial.create_trial(
+                params=known_parameters,
+                distributions=distributions,
+                value=KNOWN_BEST_LOSS,
+                user_attrs={
+                    "source": "validated deterministic run",
+                    "raw_loss": KNOWN_BEST_LOSS,
+                    "excluded_non_positive_loss": False,
+                },
+            )
+        )
+
+    if study_was_empty:
+        # Test the most consequential remaining structural alternative first.
+        s1_trial = dict(known_parameters)
+        s1_trial["enable_s1_bypass"] = True
+        study.enqueue_trial(
+            s1_trial,
+            user_attrs={"source": "queued S1 comparison"},
+        )
 
 
 def _recover_interrupted_trials(optuna, study):
@@ -413,10 +462,21 @@ def show_status():
     pid = _read_pid()
     print(f"PID: {pid or '-'}")
     print(f"Running: {'yes' if _pid_is_running(pid) else 'no'}")
-    if BEST_PATH.is_file():
-        print(BEST_PATH.read_text(encoding="utf-8").rstrip())
+    try:
+        optuna = _require_optuna()
+        study = _load_existing_study(optuna)
+        best = study.best_trial
+    except (SystemExit, ValueError) as exc:
+        print(f"Current study {STUDY_NAME!r}: not initialized ({exc})")
     else:
-        print("Best result: not available yet")
+        payload = {
+            "study": study.study_name,
+            "trial": best.number,
+            "loss": best.value,
+            "raw_loss": best.user_attrs.get("raw_loss", best.value),
+            "parameters": best.params,
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
     print(f"Log: {LOG_PATH}")
 
 

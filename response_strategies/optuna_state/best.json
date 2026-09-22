@@ -1,36 +1,36 @@
 {
   "environment": {
-    "WSC_BERTH_WAIT_WEIGHT": 7679.501738499435,
+    "WSC_BERTH_WAIT_WEIGHT": 3612.197176310383,
     "WSC_ENABLE_S1_BYPASS": false,
     "WSC_ENABLE_S4_DETOUR": true,
     "WSC_ENABLE_S5_DETOUR": true,
     "WSC_ENABLE_S7_SKIP": false,
     "WSC_ENABLE_S9_DETOUR": false,
-    "WSC_ESTIMATED_BERTH_CALL_DAYS": 0.20921726838893173,
-    "WSC_LEAD_MARGIN_S4": 1.9726041660827611,
-    "WSC_LEAD_MARGIN_S5": 9.714412216786961,
-    "WSC_LEAD_MARGIN_S9": 4.982661959620473,
-    "WSC_PORT_LEAD_MARGIN_S1": 2.7414416695544688,
-    "WSC_PORT_LEAD_MARGIN_S7": 0.06746141498052903,
+    "WSC_ESTIMATED_BERTH_CALL_DAYS": 0.334316796877574,
+    "WSC_LEAD_MARGIN_S4": 1.7919450471544445,
+    "WSC_LEAD_MARGIN_S5": 9.994766349122587,
+    "WSC_LEAD_MARGIN_S9": 4.965248916465518,
+    "WSC_PORT_LEAD_MARGIN_S1": 3.3327872613451546,
+    "WSC_PORT_LEAD_MARGIN_S7": 0.008721596207972346,
     "WSC_ROUND2_MODE": "detour",
-    "WSC_WAIT_FRACTION": 0.9012414874679703
+    "WSC_WAIT_FRACTION": 0.7801957406282308
   },
-  "loss": -4.432372990628467,
+  "loss": 0.6144223121391709,
   "parameters": {
-    "berth_call_days": 0.20921726838893173,
-    "berth_wait_weight": 7679.501738499435,
+    "berth_call_days": 0.334316796877574,
+    "berth_wait_weight": 3612.197176310383,
     "enable_s1_bypass": false,
     "enable_s4_detour": true,
     "enable_s7_skip": false,
     "enable_s9_detour": false,
-    "lead_margin_s4": 1.9726041660827611,
-    "lead_margin_s5": 9.714412216786961,
-    "lead_margin_s9": 4.982661959620473,
-    "port_lead_margin_s1": 2.7414416695544688,
-    "port_lead_margin_s7": 0.06746141498052903,
-    "wait_fraction": 0.9012414874679703
+    "lead_margin_s4": 1.7919450471544445,
+    "lead_margin_s5": 9.994766349122587,
+    "lead_margin_s9": 4.965248916465518,
+    "port_lead_margin_s1": 3.3327872613451546,
+    "port_lead_margin_s7": 0.008721596207972346,
+    "wait_fraction": 0.7801957406282308
   },
-  "study": "wsc_round2_loss",
-  "trial": 23,
-  "updated_at": "2026-09-06T18:17:39"
+  "study": "wsc_round2_positive_loss",
+  "trial": 2,
+  "updated_at": "2026-09-21T21:52:11"
 }

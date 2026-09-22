@@ -36,27 +36,27 @@ _ROUND2_CLOSED_PORTS = {"piraeus", "tianjin"}
 _BERTHING_DAYS_PER_CALL = 3.0 / 24.0
 _KNOTS_TO_NM_PER_DAY = 24.0
 
-# Trial 12: deterministic Round 2 result, Loss = 3.295500192581237.
+# Trial 20: deterministic Round 2 result, Loss = 0.6144223121391709.
 # These defaults are deliberately stored in source code so a normal judging
 # run does not depend on Optuna's generated/ignored optuna_state directory.
-_DEFAULT_WAIT_FRACTION = 0.932682014844758
-_DEFAULT_ESTIMATED_BERTH_CALL_DAYS = 0.2143979900583058
-_DEFAULT_BERTH_WAIT_WEIGHT = 12994.122976779254
+_DEFAULT_WAIT_FRACTION = 0.7801957406282308
+_DEFAULT_ESTIMATED_BERTH_CALL_DAYS = 0.334316796877574
+_DEFAULT_BERTH_WAIT_WEIGHT = 3612.197176310383
 _DEFAULT_LEAD_MARGINS = {
-    "s4": 1.0129921282683818,
-    "s5": 8.905983046556884,
-    "s9": 4.660638795739538,
+    "s4": 1.7919450471544445,
+    "s5": 9.994766349122587,
+    "s9": 4.965248916465518,
 }
 _DEFAULT_PORT_LEAD_MARGINS = {
-    "s1": 4.661366835539739,
-    "s7": 1.5186231710926994,
+    "s1": 3.3327872613451546,
+    "s7": 0.008721596207972346,
 }
 _DEFAULT_LEG_DETOURS = {
-    "s4": False,
+    "s4": True,
     "s5": True,
     "s9": False,
 }
-_DEFAULT_S7_SKIP = True
+_DEFAULT_S7_SKIP = False
 _DEFAULT_S1_BYPASS = False
 
 
