@@ -1,13 +1,13 @@
 Route,Name,Avg Capacity TEU,Avg Carried TEU,Utilization
-S1,Asia-Europe-NorthEurope,"134,443","7,432",5.53%
-S2,Intra-EastAsia,"12,852","1,000",7.78%
-S3,Mekong-Regional-Feeder,"4,871",173,3.56%
-S4,Transpacific-South,"50,924","1,303",2.56%
-S5,Asia-US-East,"86,145","2,359",2.74%
-S5-R2-DETOUR,Asia-US-East Round 2 Detour,"29,451",660,2.24%
-S6,Transatlantic-Caribbean,"38,086","1,109",2.91%
-S7,IndianOcean-Gulf-EastMed,"37,012","1,255",3.39%
-S7-R2-PIRAEUS-SKIP,IndianOcean-Gulf-EastMed Round 2 Piraeus Skip,"4,590",272,5.93%
-S8,Indonesia-Regional-Feeder,"1,535",65,4.21%
-S9,Transpacific-North,"63,015",841,1.33%
-TOTAL,,"462,924","16,468",3.56%
+S1,Asia-Europe-NorthEurope,"135,787","6,337",4.67%
+S2,Intra-EastAsia,"12,852",977,7.61%
+S3,Mekong-Regional-Feeder,"4,867",175,3.59%
+S4,Transpacific-South,"41,711","1,111",2.66%
+S4-R2-DETOUR,Transpacific-South Round 2 Detour,"14,923",376,2.52%
+S5,Asia-US-East,"85,027","3,537",4.16%
+S5-R2-DETOUR,Asia-US-East Round 2 Detour,"29,766",715,2.40%
+S6,Transatlantic-Caribbean,"38,067","1,124",2.95%
+S7,IndianOcean-Gulf-EastMed,"38,254","1,243",3.25%
+S8,Indonesia-Regional-Feeder,"1,535",65,4.23%
+S9,Transpacific-North,"62,792",822,1.31%
+TOTAL,,"465,582","16,482",3.54%
