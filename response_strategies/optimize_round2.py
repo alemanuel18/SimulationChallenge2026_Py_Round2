@@ -169,7 +169,8 @@ def _compute_baseline_task(definition, seed, warmup_days, simulation_days, inter
     }
 
 
-def _prepare_baselines(definitions, case_root, workers, seed, warmup_days, simulation_days, interval_days):
+def _prepare_baselines(definitions, case_root, workers, seed, warmup_days,
+                       simulation_days, interval_days, timeout_seconds):
     baselines, missing = {}, []
     for definition in definitions:
         path = _baseline_cache_path(case_root, definition["id"], warmup_days, simulation_days, interval_days)
@@ -181,13 +182,16 @@ def _prepare_baselines(definitions, case_root, workers, seed, warmup_days, simul
         missing.append(definition)
     if missing:
         print(f"Computing {len(missing)} missing paired baselines...", flush=True)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=workers)
+        try:
             futures = {
                 executor.submit(_compute_baseline_task, definition, seed, warmup_days,
                                 simulation_days, interval_days): definition
                 for definition in missing
             }
-            for future in concurrent.futures.as_completed(futures):
+            for future in concurrent.futures.as_completed(
+                futures, timeout=timeout_seconds
+            ):
                 definition = futures[future]
                 payload = future.result()
                 path = _baseline_cache_path(case_root, definition["id"], warmup_days,
@@ -195,6 +199,18 @@ def _prepare_baselines(definitions, case_root, workers, seed, warmup_days, simul
                 path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
                 baselines[definition["id"]] = payload["period_att"]
                 print(f"  baseline {definition['id']} ({payload['runtime_seconds']:.1f}s)", flush=True)
+        except TimeoutError as exc:
+            executor.terminate_workers()
+            unfinished = [
+                definition["id"]
+                for future, definition in futures.items()
+                if not future.done()
+            ]
+            raise RuntimeError(
+                f"Baseline timeout after {timeout_seconds}s: {unfinished}"
+            ) from exc
+        else:
+            executor.shutdown()
     return baselines
 
 
@@ -233,21 +249,27 @@ def _write_case_result(case_root, case_result, run_name, parameters, score=None)
 
 
 def evaluate_parameters(parameters, run_name, workers=10, seed=2026,
-                        warmup_days=140, simulation_days=360, interval_days=5):
+                        warmup_days=140, simulation_days=360, interval_days=5,
+                        timeout_seconds=3600):
     _, case_root, _, load_cases, prepare_cases = _load_scenario_support()
     prepare_cases()
     definitions = load_cases()
     baselines = _prepare_baselines(definitions, case_root, workers, seed,
-                                   warmup_days, simulation_days, interval_days)
+                                   warmup_days, simulation_days, interval_days,
+                                   timeout_seconds)
     results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=workers)
+    timed_out = False
+    try:
         futures = {
             executor.submit(_run_case_task, definition, baselines[definition["id"]],
                             parameters, seed, warmup_days, simulation_days,
                             interval_days): definition
             for definition in definitions
         }
-        for future in concurrent.futures.as_completed(futures):
+        for future in concurrent.futures.as_completed(
+            futures, timeout=timeout_seconds
+        ):
             definition = futures[future]
             try:
                 result = future.result()
@@ -261,6 +283,36 @@ def evaluate_parameters(parameters, run_name, workers=10, seed=2026,
             _write_case_result(case_root, result, run_name, parameters)
             suffix = f" error={result['error']}" if "error" in result else ""
             print(f"  {result['case']}: loss={result['loss']:.6f}{suffix}", flush=True)
+    except TimeoutError:
+        timed_out = True
+        completed_cases = {item["case"] for item in results}
+        for future, definition in futures.items():
+            if definition["id"] in completed_cases:
+                continue
+            if future.done():
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = {
+                        "case": definition["id"],
+                        "loss": FAILURE_LOSS,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "traceback": traceback.format_exc(),
+                    }
+            else:
+                result = {
+                    "case": definition["id"],
+                    "loss": FAILURE_LOSS,
+                    "error": f"Timeout after {timeout_seconds} seconds",
+                }
+            results.append(result)
+            _write_case_result(case_root, result, run_name, parameters)
+            suffix = " timeout" if not future.done() else " completed at deadline"
+            print(f"  {result['case']}: loss={result['loss']:.6f}{suffix}", flush=True)
+        executor.terminate_workers()
+    finally:
+        if not timed_out:
+            executor.shutdown()
     results.sort(key=lambda item: item["case"])
     score = _robust_score([item["loss"] for item in results])
     for result in results:
@@ -292,7 +344,8 @@ def _objective_factory(args):
         started = time.perf_counter()
         score, results = evaluate_parameters(
             parameters, f"trial_{trial.number:06d}", args.workers, args.seed,
-            args.warmup_days, args.simulation_days, args.interval_days)
+            args.warmup_days, args.simulation_days, args.interval_days,
+            args.case_timeout_seconds)
         losses = {item["case"]: item["loss"] for item in results}
         trial.set_user_attr("case_losses", losses)
         trial.set_user_attr("mean_loss", statistics.fmean(losses.values()))
@@ -350,7 +403,8 @@ def launch_daemon(args):
                "--workers", str(args.workers), "--seed", str(args.seed),
                "--warmup-days", str(args.warmup_days),
                "--simulation-days", str(args.simulation_days),
-               "--interval-days", str(args.interval_days)]
+               "--interval-days", str(args.interval_days),
+               "--case-timeout-seconds", str(args.case_timeout_seconds)]
     if args.trials is not None:
         command.extend(["--trials", str(args.trials)])
     environment = dict(os.environ)
@@ -417,7 +471,8 @@ def evaluate_stored_trial(args, trial_number=None):
         raise SystemExit(f"Trial {trial_number} does not exist")
     score, _ = evaluate_parameters(
         trial.params, f"rerun_trial_{trial.number:06d}", args.workers, args.seed,
-        args.warmup_days, args.simulation_days, args.interval_days)
+        args.warmup_days, args.simulation_days, args.interval_days,
+        args.case_timeout_seconds)
     print(f"trial={trial.number} robust_score={score:.6f}")
 
 
@@ -449,8 +504,10 @@ def parse_arguments(argv=None):
     parser.add_argument("--warmup-days", type=int, default=140)
     parser.add_argument("--simulation-days", type=int, default=360)
     parser.add_argument("--interval-days", type=int, default=5)
+    parser.add_argument("--case-timeout-seconds", type=int, default=3600)
     args = parser.parse_args(argv)
-    if args.workers < 1 or args.interval_days < 1 or args.warmup_days < 0 or args.simulation_days < 1:
+    if (args.workers < 1 or args.interval_days < 1 or args.warmup_days < 0
+            or args.simulation_days < 1 or args.case_timeout_seconds < 1):
         parser.error("workers/interval/simulation must be positive and warmup non-negative")
     return args
 
@@ -469,12 +526,14 @@ def main(argv=None):
         print(f"Prepared {len(paths)} cases under {case_root}")
     elif args.smoke:
         score, _ = evaluate_parameters(_default_parameters(), "smoke_default",
-                                       args.workers, args.seed, 5, 15, 5)
+                                       args.workers, args.seed, 5, 15, 5,
+                                       args.case_timeout_seconds)
         print(f"smoke robust_score={score:.6f}")
     elif args.evaluate_default:
         score, _ = evaluate_parameters(_default_parameters(), "current_defaults",
                                        args.workers, args.seed, args.warmup_days,
-                                       args.simulation_days, args.interval_days)
+                                       args.simulation_days, args.interval_days,
+                                       args.case_timeout_seconds)
         print(f"default robust_score={score:.6f}")
     elif args.daemon:
         launch_daemon(args)

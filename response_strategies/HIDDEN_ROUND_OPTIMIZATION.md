@@ -54,6 +54,10 @@ congestión pueden tardar bastante más. Cada resultado se guarda en cuanto su
 proceso termina, aunque otro caso continúe trabajando o la corrida se
 interrumpa.
 
+Cada caso tiene un límite predeterminado de 3600 segundos. Si una combinación
+produce congestión explosiva y excede ese tiempo, recibe `loss=1000` y la
+búsqueda continúa. Puede cambiarse con `--case-timeout-seconds SEGUNDOS`.
+
 ## Selección robusta
 
 Cada candidato usa exactamente los mismos parámetros en los diez escenarios.
