@@ -6,6 +6,7 @@ from response_strategies.optimize_round2 import (
     _default_parameters,
     _environment_from_parameters,
     _loss_from_periods,
+    parse_arguments,
     _robust_score,
     _write_case_result,
 )
@@ -54,3 +55,7 @@ def test_case_result_is_persisted_before_aggregate_score_exists(tmp_path):
     saved = case_directory / "results" / "trial_000001.json"
     assert saved.is_file()
     assert "robust_score" not in saved.read_text(encoding="utf-8")
+
+
+def test_default_case_timeout_is_two_hours():
+    assert parse_arguments([]).case_timeout_seconds == 7_200

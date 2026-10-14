@@ -250,7 +250,7 @@ def _write_case_result(case_root, case_result, run_name, parameters, score=None)
 
 def evaluate_parameters(parameters, run_name, workers=10, seed=2026,
                         warmup_days=140, simulation_days=360, interval_days=5,
-                        timeout_seconds=3600):
+                        timeout_seconds=7200):
     _, case_root, _, load_cases, prepare_cases = _load_scenario_support()
     prepare_cases()
     definitions = load_cases()
@@ -504,7 +504,7 @@ def parse_arguments(argv=None):
     parser.add_argument("--warmup-days", type=int, default=140)
     parser.add_argument("--simulation-days", type=int, default=360)
     parser.add_argument("--interval-days", type=int, default=5)
-    parser.add_argument("--case-timeout-seconds", type=int, default=3600)
+    parser.add_argument("--case-timeout-seconds", type=int, default=7200)
     args = parser.parse_args(argv)
     if (args.workers < 1 or args.interval_days < 1 or args.warmup_days < 0
             or args.simulation_days < 1 or args.case_timeout_seconds < 1):
