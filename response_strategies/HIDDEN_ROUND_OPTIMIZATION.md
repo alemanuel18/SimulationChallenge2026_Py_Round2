@@ -25,7 +25,7 @@ ni `main.py`.
 La ruta contiene espacios, por lo que debe escribirse entre comillas:
 
 ```bash
-cd "/home/alemanuel/Documents/Universidad/tercer round/SimulationChallenge2026_Py_Round2"
+cd "SimulationChallenge2026_Py_Round2"
 ```
 
 ## 3. Crear el entorno virtual
@@ -281,15 +281,15 @@ Opciones principales:
 | `--warmup-days` | `140` | Días de calentamiento por simulación. |
 | `--simulation-days` | `360` | Días medidos por simulación. |
 | `--interval-days` | `5` | Tamaño de cada intervalo del loss. |
-| `--case-timeout-seconds` | `7200` | Máximo de dos horas por escenario. |
+| `--case-timeout-seconds` | `3600` | Máximo de una hora por escenario. |
 
-Ejemplo con cuatro procesos y máximo de dos horas:
+Ejemplo con cuatro procesos y máximo de una hora:
 
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --daemon \
   --workers 4 \
-  --case-timeout-seconds 7200
+  --case-timeout-seconds 3600
 ```
 
 Reducir `--workers` cambia el tiempo total, pero no la lógica ni los parámetros
@@ -299,7 +299,7 @@ comparables.
 
 ## 17. Cómo se detiene una iteración problemática
 
-Los diez casos empiezan en paralelo. Cada uno dispone de un máximo de 7,200
+Los diez casos empiezan en paralelo. Cada uno dispone de un máximo de 3,600
 segundos. Si uno o más escenarios superan ese límite:
 
 1. Se conservan los resultados de los casos que terminaron.

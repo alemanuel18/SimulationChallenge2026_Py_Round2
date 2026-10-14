@@ -57,5 +57,5 @@ def test_case_result_is_persisted_before_aggregate_score_exists(tmp_path):
     assert "robust_score" not in saved.read_text(encoding="utf-8")
 
 
-def test_default_case_timeout_is_two_hours():
-    assert parse_arguments([]).case_timeout_seconds == 7_200
+def test_default_case_timeout_is_one_hour():
+    assert parse_arguments([]).case_timeout_seconds == 3_600
