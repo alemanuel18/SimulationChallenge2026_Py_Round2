@@ -93,6 +93,33 @@ def test_manage_routes_is_idempotent_and_preserves_model_invariants():
     assert alternatives[0]._round2_active
 
 
+def test_overlapping_events_keep_only_one_alternative_active():
+    context, source_route, _, event = _network(multiplier=6.0)
+    context.disruption_plans.append(
+        DisruptionPlan(
+            target_leg=event.target_leg,
+            start_offset_days=event.start_offset_days,
+            duration_days=event.duration_days,
+            multiplier=8.0,
+        )
+    )
+    now = dt.datetime.min + dt.timedelta(days=event.start_offset_days - 1)
+
+    assert manage_service_routes(context, now)
+    alternatives = [
+        route
+        for route in context.service_routes
+        if getattr(route, "_round2_source_route", None) is source_route
+    ]
+    assert len(alternatives) == 2
+    assert sum(route._round2_active for route in alternatives) == 1
+
+    route_count = len(context.service_routes)
+    assert manage_service_routes(context, now)
+    assert len(context.service_routes) == route_count
+    assert sum(route._round2_active for route in alternatives) == 1
+
+
 def test_partial_berth_closure_is_not_treated_as_closed_port():
     context, _, ports, _ = _network(multiplier=1.0)
     port = ports[1]

@@ -224,6 +224,13 @@ def _set_alternative_state(
     active,
 ):
     """Apply one transition once; repeated calls are intentionally harmless."""
+    if active:
+        _deactivate_competing_alternatives(
+            context,
+            vessel,
+            source_route,
+            alternative,
+        )
     was_active = getattr(alternative, "_round2_active", False)
     alternative._round2_active = active
     if was_active != active:
@@ -238,6 +245,28 @@ def _set_alternative_state(
             _switch_vessel_to_detour(vessel, source_route, alternative)
         elif not active and vessel.assigned_service_route is alternative:
             _restore_vessel_to_source(vessel, source_route, alternative)
+
+
+def _deactivate_competing_alternatives(
+    context,
+    vessel,
+    source_route,
+    selected_alternative,
+):
+    """Keep a source fleet and its bookings on at most one active alternative."""
+    for competing in context.service_routes:
+        if competing is selected_alternative:
+            continue
+        if getattr(competing, "_round2_source_route", None) is not source_route:
+            continue
+        if not getattr(competing, "_round2_active", False):
+            continue
+
+        competing._round2_active = False
+        _move_route_bookings(competing, source_route)
+        if vessel is not None and vessel.assigned_service_route is competing:
+            _restore_vessel_to_source(vessel, source_route, competing)
+        _clear_path_caches(context)
 
 
 def assign_bookings(context, now, shipment):
