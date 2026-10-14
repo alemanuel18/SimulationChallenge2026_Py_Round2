@@ -62,3 +62,7 @@ ipython_config.py
 *.tmp
 *.swp
 *.swo
+
+SimulationChallenge2026_Py_Round0 (1)
+SimulationChallenge2026_Py_Round1
+evaluate_round.py

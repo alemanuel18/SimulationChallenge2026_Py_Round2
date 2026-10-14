@@ -1,4 +1,4 @@
-"""Round 2 response strategy.
+"""Topology-driven response strategy for published and hidden scenarios.
 
 The strategy keeps the implementation inside ``response_strategies`` while
 addressing the two main causes of resilience loss in this scenario:
@@ -9,10 +9,12 @@ addressing the two main causes of resilience loss in this scenario:
   disruption later ends.  The default one-vessel alternatives do not protect
   the rest of the affected service.
 
-For multiplied legs we therefore build a cycle-preserving detour and migrate
-the complete affected fleet shortly before the event.  Booking selection uses
-an expected-time graph, including half-headway at every boarding and known
-disruption delays.
+For multiplied legs we build a cycle-preserving detour only when its estimated
+delay saving materially exceeds its extra sailing cost.  For full port
+closures we skip removable calls or build a bounded-cost bypass.  Booking
+selection uses an expected-time graph, including service headway and known
+disruption delays.  Every decision is derived from the supplied context; route
+IDs, port names, network size, and disruption locations are not assumed.
 """
 
 from __future__ import annotations
@@ -27,37 +29,20 @@ import os
 from maritime_data_context import Booking, Segment, ServiceRoute
 
 
-_ROUND2_LEG_EVENTS = {
-    ("colombo", "new jersey"),
-    ("shanghai", "kaohsiung"),
-    ("qingdao", "busan"),
-}
-_ROUND2_CLOSED_PORTS = {"piraeus", "tianjin"}
 _BERTHING_DAYS_PER_CALL = 3.0 / 24.0
 _KNOTS_TO_NM_PER_DAY = 24.0
 
-# Trial 12: deterministic Round 2 result, Loss = 3.295500192581237.
-# These defaults are deliberately stored in source code so a normal judging
-# run does not depend on Optuna's generated/ignored optuna_state directory.
+# The expected-time parameters come from the earlier Round 2 search.  The
+# topology and activation decisions below are now derived from the context, so
+# a judging run does not depend on Optuna state or published route names.
 _DEFAULT_WAIT_FRACTION = 0.932682014844758
 _DEFAULT_ESTIMATED_BERTH_CALL_DAYS = 0.2143979900583058
-_DEFAULT_BERTH_WAIT_WEIGHT = 12994.122976779254
-_DEFAULT_LEAD_MARGINS = {
-    "s4": 1.0129921282683818,
-    "s5": 8.905983046556884,
-    "s9": 4.660638795739538,
-}
-_DEFAULT_PORT_LEAD_MARGINS = {
-    "s1": 4.661366835539739,
-    "s7": 1.5186231710926994,
-}
-_DEFAULT_LEG_DETOURS = {
-    "s4": False,
-    "s5": True,
-    "s9": False,
-}
-_DEFAULT_S7_SKIP = True
-_DEFAULT_S1_BYPASS = False
+_DEFAULT_DETOUR_GAIN_RATIO = 5.0
+_DEFAULT_MINIMUM_SAVED_DAYS = 1.0
+_DEFAULT_LEAD_HEADWAY_FACTOR = 1.5
+_DEFAULT_PORT_LEAD_HEADWAY_FACTOR = 0.25
+_DEFAULT_BYPASS_CLOSURE_FRACTION = 0.5
+_DEFAULT_PORT_SKIP_SAVINGS_RATIO = 0.5
 
 
 def _env_float(name, default, minimum=0.0, maximum=100.0):
@@ -87,36 +72,36 @@ class _Edge:
     source_arrival_index: int | None = None
 
 
-def is_round_two_context(context) -> bool:
-    """Recognise the published Round 2 scenario without affecting toy tests."""
-    route_ids = {route.id.casefold() for route in context.initial_service_routes}
-    if route_ids != {f"s{index}" for index in range(1, 10)}:
+def supports_adaptive_strategy(context) -> bool:
+    """Return whether the context exposes the primitives used by the policy."""
+    routes = getattr(context, "initial_service_routes", None)
+    legs = getattr(context, "legs", None)
+    plans = getattr(context, "disruption_plans", None)
+    if routes is None or legs is None or plans is None or not routes or not legs:
         return False
-
-    leg_events = {
-        (
-            plan.target_leg.departure_port.name.casefold(),
-            plan.target_leg.arrival_port.name.casefold(),
-        )
-        for plan in context.disruption_plans
-        if plan.target_leg is not None and plan.multiplier > 1
-    }
-    closed_ports = {
-        plan.target_berth.port.name.casefold()
-        for plan in context.disruption_plans
-        if plan.target_berth is not None and plan.close_berth
-    }
-    return leg_events == _ROUND2_LEG_EVENTS and closed_ports == _ROUND2_CLOSED_PORTS
+    return all(
+        route.segments
+        and all(segment.associated_leg in legs for segment in route.segments)
+        for route in routes
+    )
 
 
 def strategy_mode() -> str:
     """Allow reproducible comparison runs without changing simulator code."""
-    return os.environ.get("WSC_ROUND2_MODE", "detour").strip().casefold()
+    return os.environ.get(
+        "WSC_STRATEGY_MODE",
+        os.environ.get("WSC_ROUND2_MODE", "detour"),
+    ).strip().casefold()
 
 
 def manage_service_routes(context, now, vessel=None):
-    """Create/activate full-fleet detours and suppress the default alternatives."""
-    if not is_round_two_context(context):
+    """Activate worthwhile full-fleet detours or delegate safely to default."""
+    if not supports_adaptive_strategy(context):
+        return None
+    if not _has_actionable_strategy(context):
+        # A safe fallback is part of the adaptive policy: when no candidate
+        # clears the cost-benefit threshold, let the simulator's default
+        # strategy handle the scenario instead of suppressing it.
         return None
 
     mode = strategy_mode()
@@ -124,134 +109,142 @@ def manage_service_routes(context, now, vessel=None):
         return False
 
     for event in _unique_congested_leg_events(context):
-        source_route = _source_route_for_leg(context, event.target_leg)
-        if source_route is None:
-            continue
-        route_key = source_route.id.casefold()
-        if not _env_enabled(
-            f"WSC_ENABLE_{source_route.id.upper()}_DETOUR",
-            _DEFAULT_LEG_DETOURS.get(route_key, True),
-        ):
-            continue
+        for source_route in _source_routes_for_leg(context, event.target_leg):
+            _manage_leg_event(context, now, vessel, source_route, event)
 
-        start_day = float(event.start_offset_days)
-        end_day = start_day + float(event.duration_days)
-        # A source vessel must change course before it can start the affected
-        # leg.  One normal traversal time plus a daily-manager margin is enough
-        # to catch it at an earlier port call.
-        speed = _route_speed(source_route)
-        lead_margin = _env_float(
-            f"WSC_LEAD_MARGIN_{source_route.id.upper()}",
-            _DEFAULT_LEAD_MARGINS.get(route_key, 1.0),
-            0.0,
-            30.0,
-        )
-        lead_days = (
-            event.target_leg.sailing_distance / speed / 24.0 + lead_margin
-        )
-        now_day = _absolute_day(now)
-        active = start_day - lead_days <= now_day < end_day
-
-        alternative = _find_detour(context, source_route, event)
-        if active and alternative is None:
-            alternative = _create_cycle_preserving_detour(
-                context, source_route, event
-            )
-        if alternative is None:
-            continue
-
-        was_active = getattr(alternative, "_round2_active", False)
-        alternative._round2_active = active
-        if was_active != active:
-            _clear_path_caches(context)
-        if active:
-            _move_route_bookings(source_route, alternative)
-        else:
-            _move_route_bookings(alternative, source_route)
-
-        if vessel is not None:
-            if active and vessel.assigned_service_route is source_route:
-                _switch_vessel_to_detour(vessel, source_route, alternative)
-            elif not active and vessel.assigned_service_route is alternative:
-                _restore_vessel_to_source(vessel, source_route, alternative)
-
-    # S7 becomes a valid, shorter Singapore-Colombo-Jebel Ali cycle when the
-    # closed Piraeus call is removed.  S1 does not: its available bypass adds
-    # roughly 26 sailing days, so it is intentionally left unchanged.
     for event in _unique_closed_port_events(context):
         closed_port = event.target_berth.port
         for source_route in context.initial_service_routes:
-            if (
-                source_route.id.casefold() == "s7"
-                and not _env_enabled("WSC_ENABLE_S7_SKIP", _DEFAULT_S7_SKIP)
-            ):
-                continue
-            alternative = _find_port_skip_detour(
-                context, source_route, closed_port, event
+            _manage_port_event(
+                context,
+                now,
+                vessel,
+                source_route,
+                closed_port,
+                event,
             )
-            if alternative is None:
-                alternative = _create_shorter_port_skip_detour(
-                    context, source_route, closed_port, event
-                )
-            if (
-                alternative is None
-                and source_route.id.casefold() == "s1"
-                and _env_enabled(
-                    "WSC_ENABLE_S1_BYPASS",
-                    _env_enabled("WSC_S1_BYPASS", _DEFAULT_S1_BYPASS),
-                )
-            ):
-                alternative = _create_s1_port_bypass(
-                    context, source_route, closed_port, event
-                )
-            if alternative is None:
-                continue
-
-            inbound_days = max(
-                (
-                    segment.associated_leg.sailing_distance
-                    / _route_speed(source_route)
-                    / 24.0
-                    for segment in source_route.segments
-                    if segment.associated_leg.arrival_port is closed_port
-                ),
-                default=0.0,
-            )
-            now_day = _absolute_day(now)
-            port_lead_margin = _env_float(
-                f"WSC_PORT_LEAD_MARGIN_{source_route.id.upper()}",
-                _DEFAULT_PORT_LEAD_MARGINS.get(
-                    source_route.id.casefold(), 1.0
-                ),
-                0.0,
-                30.0,
-            )
-            active = (
-                event.start_offset_days - inbound_days - port_lead_margin
-                <= now_day
-                < event.start_offset_days + event.duration_days
-            )
-            was_active = getattr(alternative, "_round2_active", False)
-            alternative._round2_active = active
-            if was_active != active:
-                _clear_path_caches(context)
-            if active:
-                _move_route_bookings(source_route, alternative)
-            else:
-                _move_route_bookings(alternative, source_route)
-
-            if vessel is not None:
-                if active and vessel.assigned_service_route is source_route:
-                    _switch_vessel_to_detour(vessel, source_route, alternative)
-                elif not active and vessel.assigned_service_route is alternative:
-                    _restore_vessel_to_source(vessel, source_route, alternative)
 
     return True
 
 
+def _manage_leg_event(context, now, vessel, source_route, event):
+    alternative = _find_detour(context, source_route, event)
+    enabled = _env_enabled(
+        f"WSC_ENABLE_{_environment_key(source_route.id)}_DETOUR",
+        _leg_detour_is_beneficial(context, source_route, event),
+    )
+
+    start_day = float(event.start_offset_days)
+    end_day = start_day + float(event.duration_days)
+    speed = _route_speed(source_route)
+    normal_leg_days = event.target_leg.sailing_distance / speed / 24.0
+    headway = _route_headway_days(source_route)
+    lead_margin = _env_float(
+        f"WSC_LEAD_MARGIN_{_environment_key(source_route.id)}",
+        min(10.0, max(0.5, headway * _DEFAULT_LEAD_HEADWAY_FACTOR)),
+        0.0,
+        30.0,
+    )
+    lead_days = normal_leg_days + lead_margin
+    now_day = _absolute_day(now)
+    active = enabled and start_day - lead_days <= now_day < end_day
+
+    if active and alternative is None:
+        alternative = _create_cycle_preserving_detour(
+            context, source_route, event
+        )
+    if alternative is None:
+        return
+    _set_alternative_state(
+        context, vessel, source_route, alternative, active
+    )
+
+
+def _manage_port_event(
+    context,
+    now,
+    vessel,
+    source_route,
+    closed_port,
+    event,
+):
+    if not _route_visits_port(source_route, closed_port):
+        return
+
+    inbound_days = max(
+        (
+            segment.associated_leg.sailing_distance
+            / _route_speed(source_route)
+            / 24.0
+            for segment in source_route.segments
+            if segment.associated_leg.arrival_port is closed_port
+        ),
+        default=0.0,
+    )
+    headway = _route_headway_days(source_route)
+    port_lead_margin = _env_float(
+        f"WSC_PORT_LEAD_MARGIN_{_environment_key(source_route.id)}",
+        min(
+            5.0,
+            max(0.5, headway * _DEFAULT_PORT_LEAD_HEADWAY_FACTOR),
+        ),
+        0.0,
+        30.0,
+    )
+    now_day = _absolute_day(now)
+    active = (
+        event.start_offset_days - inbound_days - port_lead_margin
+        <= now_day
+        < event.start_offset_days + event.duration_days
+    )
+
+    alternative = _find_port_skip_detour(
+        context, source_route, closed_port, event
+    )
+    if active and alternative is None:
+        alternative = _create_shorter_port_skip_detour(
+            context, source_route, closed_port, event
+        )
+        if alternative is None:
+            alternative = _create_port_bypass(
+                context, source_route, closed_port, event
+            )
+    if alternative is None:
+        return
+    _set_alternative_state(
+        context, vessel, source_route, alternative, active
+    )
+
+
+def _set_alternative_state(
+    context,
+    vessel,
+    source_route,
+    alternative,
+    active,
+):
+    """Apply one transition once; repeated calls are intentionally harmless."""
+    was_active = getattr(alternative, "_round2_active", False)
+    alternative._round2_active = active
+    if was_active != active:
+        _clear_path_caches(context)
+    if active:
+        _move_route_bookings(source_route, alternative)
+    else:
+        _move_route_bookings(alternative, source_route)
+
+    if vessel is not None:
+        if active and vessel.assigned_service_route is source_route:
+            _switch_vessel_to_detour(vessel, source_route, alternative)
+        elif not active and vessel.assigned_service_route is alternative:
+            _restore_vessel_to_source(vessel, source_route, alternative)
+
+
 def assign_bookings(context, now, shipment):
-    """Assign an expected-time-minimising booking chain for Round 2."""
-    if not is_round_two_context(context):
+    """Assign an expected-time-minimising booking chain for any valid network."""
+    if not supports_adaptive_strategy(context):
+        return None
+    if not _has_actionable_strategy(context):
         return None
     if strategy_mode() == "suppress":
         return None
@@ -300,7 +293,11 @@ def select_vessel_for_berth(
     waiting_since_by_vessel=None,
 ):
     """Prioritise TEU-hours already accumulated, with starvation protection."""
-    if not is_round_two_context(context) or not waiting_vessels:
+    if (
+        not supports_adaptive_strategy(context)
+        or not _has_actionable_strategy(context)
+        or not waiting_vessels
+    ):
         return None
     waiting_since_by_vessel = waiting_since_by_vessel or {}
 
@@ -325,7 +322,7 @@ def select_vessel_for_berth(
         # Waiting time dominates after a prolonged queue, preventing starvation.
         starvation_weight = _env_float(
             "WSC_BERTH_WAIT_WEIGHT",
-            _DEFAULT_BERTH_WAIT_WEIGHT,
+            _adaptive_berth_wait_weight(waiting_vessels),
             0.0,
             50_000.0,
         )
@@ -354,33 +351,135 @@ def _unique_congested_leg_events(context):
 
 
 def _unique_closed_port_events(context):
-    unique = {}
+    grouped = {}
     for plan in context.disruption_plans:
         if plan.target_berth is None or not plan.close_berth:
             continue
+        port = plan.target_berth.port
         key = (
-            plan.target_berth.port.name.casefold(),
+            port,
             plan.start_offset_days,
             plan.duration_days,
         )
-        unique.setdefault(key, plan)
-    return list(unique.values())
+        grouped.setdefault(key, []).append(plan)
+
+    events = []
+    for (port, _, _), plans in grouped.items():
+        closed_berths = {plan.target_berth for plan in plans}
+        if port.berths and all(berth in closed_berths for berth in port.berths):
+            events.append(plans[0])
+    return events
+
+
+def _source_routes_for_leg(context, target_leg):
+    key = _leg_key(target_leg)
+    return [
+        route
+        for route in context.initial_service_routes
+        if any(
+            segment.associated_leg is target_leg
+            or _leg_key(segment.associated_leg) == key
+            for segment in route.segments
+        )
+    ]
 
 
 def _source_route_for_leg(context, target_leg):
-    for route in context.initial_service_routes:
-        if any(segment.associated_leg is target_leg for segment in route.segments):
-            return route
-    # Scenario construction can contain equivalent physical leg objects.
-    key = _leg_key(target_leg)
-    return next(
-        (
-            route
-            for route in context.initial_service_routes
-            if any(_leg_key(segment.associated_leg) == key for segment in route.segments)
-        ),
-        None,
+    """Compatibility helper returning the first affected source route."""
+    return next(iter(_source_routes_for_leg(context, target_leg)), None)
+
+
+def _has_actionable_strategy(context):
+    cached = getattr(context, "_adaptive_actionable_strategy", None)
+    if cached is not None:
+        return cached
+
+    actionable = any(
+        _leg_detour_is_beneficial(context, route, event)
+        for event in _unique_congested_leg_events(context)
+        for route in _source_routes_for_leg(context, event.target_leg)
     )
+    if not actionable:
+        for event in _unique_closed_port_events(context):
+            closed_port = event.target_berth.port
+            for route in context.initial_service_routes:
+                if _shorter_port_skip_segments(route, closed_port) is not None:
+                    actionable = True
+                    break
+                if _port_bypass_plan(
+                    context, route, closed_port, event
+                ) is not None:
+                    actionable = True
+                    break
+            if actionable:
+                break
+
+    context._adaptive_actionable_strategy = actionable
+    return actionable
+
+
+def _leg_detour_is_beneficial(context, source_route, event):
+    blocked_key = _leg_key(event.target_leg)
+    blocked_legs = {
+        leg for leg in context.legs if _leg_key(leg) == blocked_key
+    }
+    path = _shortest_leg_path(
+        context,
+        event.target_leg.departure_port,
+        event.target_leg.arrival_port,
+        blocked_legs,
+    )
+    if not path:
+        return False
+
+    speed = _route_speed(source_route)
+    normal_days = event.target_leg.sailing_distance / speed / 24.0
+    detour_days = sum(leg.sailing_distance for leg in path) / speed / 24.0
+    extra_days = max(0.0, detour_days - normal_days)
+    saved_days = normal_days * max(0.0, float(event.multiplier) - 1.0)
+    gain_ratio = _env_float(
+        "WSC_DETOUR_GAIN_RATIO",
+        _DEFAULT_DETOUR_GAIN_RATIO,
+        0.0,
+        100.0,
+    )
+    minimum_saved = _env_float(
+        "WSC_MINIMUM_SAVED_DAYS",
+        _DEFAULT_MINIMUM_SAVED_DAYS,
+        0.0,
+        100.0,
+    )
+    return saved_days >= minimum_saved and saved_days >= extra_days * gain_ratio
+
+
+def _route_visits_port(route, port):
+    return any(
+        segment.associated_leg.departure_port is port
+        or segment.associated_leg.arrival_port is port
+        for segment in route.segments
+    )
+
+
+def _environment_key(value):
+    return "".join(
+        character if character.isalnum() else "_"
+        for character in str(value).upper()
+    )
+
+
+def _adaptive_berth_wait_weight(waiting_vessels):
+    capacities = sorted(
+        vessel.vessel_class.teu_capacity
+        for vessel in waiting_vessels
+        if vessel.vessel_class is not None
+        and vessel.vessel_class.teu_capacity > 0
+    )
+    if not capacities:
+        return 1_000.0
+    middle = len(capacities) // 2
+    if len(capacities) % 2:
+        return float(capacities[middle])
+    return (capacities[middle - 1] + capacities[middle]) / 2.0
 
 
 def _find_detour(context, source_route, event):
@@ -410,41 +509,17 @@ def _find_port_skip_detour(context, source_route, closed_port, event):
 
 
 def _create_shorter_port_skip_detour(context, source_route, closed_port, event):
-    source_segments = sorted(source_route.segments, key=lambda item: item.sequence_index)
-    if not any(
-        segment.associated_leg.departure_port is closed_port
-        or segment.associated_leg.arrival_port is closed_port
-        for segment in source_segments
-    ):
-        return None
-    retained = [
-        segment
-        for segment in source_segments
-        if segment.associated_leg.departure_port is not closed_port
-        and segment.associated_leg.arrival_port is not closed_port
-    ]
-    if len(retained) < 2:
-        return None
-    for index, segment in enumerate(retained):
-        following = retained[(index + 1) % len(retained)]
-        if (
-            segment.associated_leg.arrival_port
-            is not following.associated_leg.departure_port
-        ):
-            return None
-
-    source_distance = sum(
-        segment.associated_leg.sailing_distance for segment in source_segments
-    )
-    retained_distance = sum(
-        segment.associated_leg.sailing_distance for segment in retained
-    )
-    if retained_distance > source_distance:
+    retained = _shorter_port_skip_segments(source_route, closed_port)
+    if retained is None:
         return None
 
     route = ServiceRoute(
-        id=f"{source_route.id}-R2-{closed_port.name.upper()}-SKIP",
-        name=f"{source_route.name} Round 2 {closed_port.name} Skip",
+        id=(
+            f"{source_route.id}-ADAPT-"
+            f"{_environment_key(closed_port.name)}-SKIP-"
+            f"{_event_token(event.start_offset_days)}"
+        ),
+        name=f"{source_route.name} Adaptive {closed_port.name} Skip",
         start_day_of_week=source_route.start_day_of_week,
     )
     route.source_service_route = source_route
@@ -474,40 +549,65 @@ def _create_shorter_port_skip_detour(context, source_route, closed_port, event):
     return route
 
 
-def _create_s1_port_bypass(context, source_route, closed_port, event):
-    """Build S1's connected cross-ocean bypass while Piraeus is unavailable."""
+def _shorter_port_skip_segments(source_route, closed_port):
     source_segments = sorted(source_route.segments, key=lambda item: item.sequence_index)
-    if closed_port.name.casefold() != "piraeus":
+    if not any(
+        segment.associated_leg.departure_port is closed_port
+        or segment.associated_leg.arrival_port is closed_port
+        for segment in source_segments
+    ):
         return None
-
-    anchors = [
-        (segment.sequence_index, segment.associated_leg.departure_port)
+    retained = [
+        segment
         for segment in source_segments
         if segment.associated_leg.departure_port is not closed_port
+        and segment.associated_leg.arrival_port is not closed_port
     ]
-    blocked_legs = {
-        leg
-        for leg in context.legs
-        if leg.departure_port is closed_port or leg.arrival_port is closed_port
-    }
-    paths = []
-    for index, (source_departure_index, departure_port) in enumerate(anchors):
-        next_source_index, arrival_port = anchors[(index + 1) % len(anchors)]
-        path = _shortest_leg_path(
-            context, departure_port, arrival_port, blocked_legs
-        )
-        if not path:
+    if len(retained) < 2:
+        return None
+    for index, segment in enumerate(retained):
+        following = retained[(index + 1) % len(retained)]
+        if (
+            segment.associated_leg.arrival_port
+            is not following.associated_leg.departure_port
+        ):
             return None
-        previous_source_index = (
-            next_source_index - 1
-            if next_source_index > 1
-            else source_segments[-1].sequence_index
-        )
-        paths.append((source_departure_index, previous_source_index, path))
+
+    source_distance = sum(
+        segment.associated_leg.sailing_distance for segment in source_segments
+    )
+    retained_distance = sum(
+        segment.associated_leg.sailing_distance for segment in retained
+    )
+    savings_ratio = (
+        (source_distance - retained_distance) / source_distance
+        if source_distance > 0
+        else 0.0
+    )
+    minimum_savings_ratio = _env_float(
+        "WSC_PORT_SKIP_MIN_SAVINGS_RATIO",
+        _DEFAULT_PORT_SKIP_SAVINGS_RATIO,
+        0.0,
+        1.0,
+    )
+    if savings_ratio < minimum_savings_ratio:
+        return None
+    return retained
+
+
+def _create_port_bypass(context, source_route, closed_port, event):
+    """Build a connected bypass when its extra cycle cost is bounded."""
+    paths = _port_bypass_plan(context, source_route, closed_port, event)
+    if paths is None:
+        return None
 
     route = ServiceRoute(
-        id=f"{source_route.id}-R2-PIRAEUS-BYPASS",
-        name=f"{source_route.name} Round 2 Piraeus Bypass",
+        id=(
+            f"{source_route.id}-ADAPT-"
+            f"{_environment_key(closed_port.name)}-"
+            f"{_event_token(event.start_offset_days)}"
+        ),
+        name=f"{source_route.name} Adaptive {closed_port.name} Bypass",
         start_day_of_week=source_route.start_day_of_week,
     )
     route.source_service_route = source_route
@@ -535,14 +635,67 @@ def _create_s1_port_bypass(context, source_route, closed_port, event):
     return route
 
 
+def _port_bypass_plan(context, source_route, closed_port, event):
+    if not _route_visits_port(source_route, closed_port):
+        return None
+    source_segments = sorted(source_route.segments, key=lambda item: item.sequence_index)
+    anchors = [
+        (segment.sequence_index, segment.associated_leg.departure_port)
+        for segment in source_segments
+        if segment.associated_leg.departure_port is not closed_port
+    ]
+    blocked_legs = {
+        leg
+        for leg in context.legs
+        if leg.departure_port is closed_port or leg.arrival_port is closed_port
+    }
+    paths = []
+    for index, (source_departure_index, departure_port) in enumerate(anchors):
+        next_source_index, arrival_port = anchors[(index + 1) % len(anchors)]
+        path = _shortest_leg_path(
+            context, departure_port, arrival_port, blocked_legs
+        )
+        if not path:
+            return None
+        previous_source_index = (
+            next_source_index - 1
+            if next_source_index > 1
+            else source_segments[-1].sequence_index
+        )
+        paths.append((source_departure_index, previous_source_index, path))
+
+    speed = _route_speed(source_route)
+    source_days = sum(
+        segment.associated_leg.sailing_distance for segment in source_segments
+    ) / speed / 24.0
+    bypass_days = sum(
+        leg.sailing_distance
+        for _, _, path in paths
+        for leg in path
+    ) / speed / 24.0
+    allowed_fraction = _env_float(
+        "WSC_BYPASS_CLOSURE_FRACTION",
+        _DEFAULT_BYPASS_CLOSURE_FRACTION,
+        0.0,
+        2.0,
+    )
+    extra_days = max(0.0, bypass_days - source_days)
+    expected_saved_days = event.duration_days * allowed_fraction
+    gain_ratio = _env_float(
+        "WSC_DETOUR_GAIN_RATIO",
+        _DEFAULT_DETOUR_GAIN_RATIO,
+        0.0,
+        100.0,
+    )
+    if expected_saved_days < extra_days * gain_ratio:
+        return None
+    return paths
+
+
 def _create_cycle_preserving_detour(context, source_route, event):
     blocked_key = _leg_key(event.target_leg)
     blocked_legs = {
-        plan.target_leg
-        for plan in context.disruption_plans
-        if plan.target_leg is not None
-        and _leg_key(plan.target_leg) == blocked_key
-        and plan.start_offset_days == event.start_offset_days
+        leg for leg in context.legs if _leg_key(leg) == blocked_key
     }
     source_segments = sorted(source_route.segments, key=lambda item: item.sequence_index)
     replacement_paths = {}
@@ -562,8 +715,11 @@ def _create_cycle_preserving_detour(context, source_route, event):
         replacement_paths[source_segment.sequence_index] = path
 
     route = ServiceRoute(
-        id=f"{source_route.id}-R2-DETOUR",
-        name=f"{source_route.name} Round 2 Detour",
+        id=(
+            f"{source_route.id}-ADAPT-DETOUR-"
+            f"{_event_token(event.start_offset_days)}"
+        ),
+        name=f"{source_route.name} Adaptive Detour",
         start_day_of_week=source_route.start_day_of_week,
     )
     route.source_service_route = source_route
@@ -960,6 +1116,10 @@ def _route_cycle_days(route):
     )
 
 
+def _route_headway_days(route):
+    return _route_cycle_days(route) / max(1, _eventual_vessel_count(route))
+
+
 def _eventual_vessel_count(route):
     return getattr(
         route,
@@ -995,18 +1155,24 @@ def _leg_multiplier_at(context, leg, when):
 
 def _closed_port_wait_days(context, port, when):
     day = _absolute_day(when)
-    latest_end = day
+    if not port.berths:
+        return 0.0
+    active_end_by_berth = {}
     for plan in context.disruption_plans:
-        if (
-            plan.target_berth is not None
-            and plan.close_berth
-            and plan.target_berth.port is port
-            and plan.start_offset_days <= day < plan.start_offset_days + plan.duration_days
-        ):
-            latest_end = max(
-                latest_end, plan.start_offset_days + plan.duration_days
+        if plan.target_berth is None or not plan.close_berth:
+            continue
+        if plan.target_berth.port is not port:
+            continue
+        end_day = plan.start_offset_days + plan.duration_days
+        if plan.start_offset_days <= day < end_day:
+            active_end_by_berth[plan.target_berth] = max(
+                active_end_by_berth.get(plan.target_berth, day),
+                end_day,
             )
-    return latest_end - day
+    if not all(berth in active_end_by_berth for berth in port.berths):
+        return 0.0
+    # Full closure ends as soon as the first berth becomes available again.
+    return min(active_end_by_berth.values()) - day
 
 
 def _port_is_closed(context, port, when):
@@ -1052,6 +1218,10 @@ def _clear_path_caches(context):
 
 def _absolute_day(value):
     return (value - dt.datetime.min).total_seconds() / 86_400.0
+
+
+def _event_token(value):
+    return str(float(value)).replace("-", "M").replace(".", "_")
 
 
 def _leg_key(leg):
