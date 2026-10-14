@@ -7,6 +7,7 @@ from response_strategies.optimize_round2 import (
     _environment_from_parameters,
     _loss_from_periods,
     _robust_score,
+    _write_case_result,
 )
 
 
@@ -37,3 +38,19 @@ def test_loss_matches_period_weighted_competition_formula():
     )
 
     assert loss == pytest.approx(-2.5)
+
+
+def test_case_result_is_persisted_before_aggregate_score_exists(tmp_path):
+    case_directory = tmp_path / "case_01"
+    (case_directory / "results").mkdir(parents=True)
+
+    _write_case_result(
+        tmp_path,
+        {"case": "case_01", "loss": 2.5},
+        "trial_000001",
+        _default_parameters(),
+    )
+
+    saved = case_directory / "results" / "trial_000001.json"
+    assert saved.is_file()
+    assert "robust_score" not in saved.read_text(encoding="utf-8")

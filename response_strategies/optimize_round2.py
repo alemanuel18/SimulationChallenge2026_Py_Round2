@@ -222,9 +222,11 @@ def _robust_score(losses):
     return mean + 0.35 * deviation + 0.25 * worst_excess
 
 
-def _write_case_result(case_root, case_result, run_name, parameters, score):
+def _write_case_result(case_root, case_result, run_name, parameters, score=None):
     result_path = Path(case_root) / case_result["case"] / "results" / f"{run_name}.json"
-    payload = {**case_result, "parameters": parameters, "robust_score": score}
+    payload = {**case_result, "parameters": parameters}
+    if score is not None:
+        payload["robust_score"] = score
     temporary = result_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(result_path)
@@ -254,6 +256,9 @@ def evaluate_parameters(parameters, run_name, workers=10, seed=2026,
                           "error": f"{type(exc).__name__}: {exc}",
                           "traceback": traceback.format_exc()}
             results.append(result)
+            # Persist completed work immediately. A long or interrupted stress
+            # case must not discard the results of the other nine processes.
+            _write_case_result(case_root, result, run_name, parameters)
             suffix = f" error={result['error']}" if "error" in result else ""
             print(f"  {result['case']}: loss={result['loss']:.6f}{suffix}", flush=True)
     results.sort(key=lambda item: item["case"])
