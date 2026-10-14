@@ -139,9 +139,15 @@ def _manage_leg_event(context, now, vessel, source_route, event):
     speed = _route_speed(source_route)
     normal_leg_days = event.target_leg.sailing_distance / speed / 24.0
     headway = _route_headway_days(source_route)
+    lead_headway_factor = _env_float(
+        "WSC_LEAD_HEADWAY_FACTOR",
+        _DEFAULT_LEAD_HEADWAY_FACTOR,
+        0.0,
+        5.0,
+    )
     lead_margin = _env_float(
         f"WSC_LEAD_MARGIN_{_environment_key(source_route.id)}",
-        min(10.0, max(0.5, headway * _DEFAULT_LEAD_HEADWAY_FACTOR)),
+        min(10.0, max(0.5, headway * lead_headway_factor)),
         0.0,
         30.0,
     )
@@ -182,11 +188,17 @@ def _manage_port_event(
         default=0.0,
     )
     headway = _route_headway_days(source_route)
+    port_lead_headway_factor = _env_float(
+        "WSC_PORT_LEAD_HEADWAY_FACTOR",
+        _DEFAULT_PORT_LEAD_HEADWAY_FACTOR,
+        0.0,
+        5.0,
+    )
     port_lead_margin = _env_float(
         f"WSC_PORT_LEAD_MARGIN_{_environment_key(source_route.id)}",
         min(
             5.0,
-            max(0.5, headway * _DEFAULT_PORT_LEAD_HEADWAY_FACTOR),
+            max(0.5, headway * port_lead_headway_factor),
         ),
         0.0,
         30.0,
