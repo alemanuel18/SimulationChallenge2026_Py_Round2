@@ -37,3 +37,19 @@ def test_renamed_routes_and_topology_variation_are_material():
     assert "S4" not in {route.id for route in changed_topology.initial_service_routes}
     assert all(route.id.startswith("HIDDEN-") for route in renamed.initial_service_routes)
     assert renamed.disruption_plans
+
+
+def test_expensive_cases_keep_useful_but_bounded_pressure():
+    scarce_fleet = CASE_DEFINITIONS[2]
+    berth_pressure = CASE_DEFINITIONS[3]
+    late_crisis = CASE_DEFINITIONS[9]
+
+    assert scarce_fleet["structure"]["demand_scale"] == 1.40
+    assert berth_pressure["id"] == "case_04_moderate_berth_pressure"
+    assert berth_pressure["structure"]["fleet_scale"] == 1.10
+    assert berth_pressure["structure"]["berth_counts"] == {
+        "Shanghai": 2,
+        "Rotterdam": 2,
+        "Los Angeles": 1,
+    }
+    assert late_crisis["structure"]["demand_scale"] == 1.18

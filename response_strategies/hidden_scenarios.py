@@ -17,7 +17,7 @@ from scenario_builders.baseline_stable_scenario import BaselineStableScenario
 
 
 CASE_ROOT = Path(__file__).resolve().parent / "hidden_round_cases"
-SPEC_VERSION = 1
+SPEC_VERSION = 2
 
 CASE_DEFINITIONS = (
     {
@@ -49,13 +49,13 @@ CASE_DEFINITIONS = (
         ],
     },
     {
-        "id": "case_04_berth_bottlenecks",
-        "description": "More ships, fewer berths and short repeated port closures.",
-        "structure": {"fleet_scale": 1.25, "berth_counts": {"Shanghai": 1, "Rotterdam": 1, "Los Angeles": 1}},
+        "id": "case_04_moderate_berth_pressure",
+        "description": "Moderate fleet growth, reduced berths and short repeated closures.",
+        "structure": {"fleet_scale": 1.10, "berth_counts": {"Shanghai": 2, "Rotterdam": 2, "Los Angeles": 1}},
         "disruptions": [
-            {"type": "port", "port": "Rotterdam", "start": 35, "duration": 8},
-            {"type": "port", "port": "Shanghai", "start": 126, "duration": 10},
-            {"type": "port", "port": "Los Angeles", "start": 245, "duration": 12},
+            {"type": "port", "port": "Rotterdam", "start": 35, "duration": 6},
+            {"type": "port", "port": "Shanghai", "start": 126, "duration": 8},
+            {"type": "port", "port": "Los Angeles", "start": 245, "duration": 8},
         ],
     },
     {

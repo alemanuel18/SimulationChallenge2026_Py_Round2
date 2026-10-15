@@ -116,6 +116,12 @@ response_strategies/hidden_round_cases/
 Cada carpeta contiene `scenario.json`, sus baselines cacheados y `results/`.
 El comando puede repetirse sin afectar el código entregable.
 
+El caso 04 actual representa presión moderada de atraques. La versión extrema
+anterior fue eliminada porque agotó la hora disponible en los diez trials y no
+aportaba información para distinguir candidatos. Los casos 03 y 10 se
+mantuvieron sin reducir: cuando terminaron, tardaron aproximadamente 20–32 y
+22–42 minutos, respectivamente.
+
 ## 8. Ejecutar la prueba corta
 
 Antes del iterador completo, verificar que los diez procesos puedan levantarse:
@@ -204,7 +210,7 @@ Muestra:
 Para observar el log en vivo en Linux o macOS:
 
 ```bash
-tail -f response_strategies/optuna_state/hidden_round_optimizer.log
+tail -f response_strategies/optuna_state/hidden_round_v2_optimizer.log
 ```
 
 Salir de `tail` no detiene el iterador; se sale con `Ctrl+C`.
@@ -259,9 +265,13 @@ Para reanudarlo posteriormente se utiliza el mismo comando inicial:
   --workers 10
 ```
 
-Optuna abre `hidden_round.db` y continúa el mismo estudio. Los ensayos
+Optuna abre `hidden_round_v2.db` y continúa el mismo estudio. Los ensayos
 terminados y el mejor resultado no se pierden si se cierra la terminal o se
 reinicia el equipo.
+
+Si el proceso se interrumpió mientras un trial estaba marcado como `RUNNING`,
+al reanudar se marca como fallido y su misma combinación se vuelve a colocar
+en la cola automáticamente.
 
 ## 16. Opciones configurables
 
@@ -323,6 +333,10 @@ promedio(loss) + 0.35 × desviación + 0.25 × (peor loss - promedio)
 El último término nunca puede ser negativo. Así se penalizan configuraciones
 que funcionan bien en varios casos, pero fallan gravemente en uno.
 
+El estudio v2 usa cinco trials iniciales para explorar el espacio. Desde el
+sexto trial, el muestreador TPE comienza a proponer parámetros de manera
+adaptativa a partir de los resultados anteriores.
+
 Un loss negativo significa que el resultado calculado fue negativo porque el
 ATT con estrategia fue menor que el baseline. No representa una
 reducción directa de esa cantidad de días.
@@ -332,17 +346,17 @@ reducción directa de esa cantidad de días.
 - `hidden_round_cases/case_*/scenario.json`: definición de cada caso.
 - `hidden_round_cases/case_*/baseline_*.json`: baseline cacheado.
 - `hidden_round_cases/case_*/results/*.json`: loss, ATT y parámetros.
-- `optuna_state/hidden_round.db`: estudio reanudable de Optuna.
-- `optuna_state/hidden_round_best.json`: mejor combinación encontrada.
-- `optuna_state/hidden_round_optimizer.log`: salida del daemon.
-- `optuna_state/hidden_round_optimizer.pid`: PID mientras está activo.
+- `optuna_state/hidden_round_v2.db`: estudio reanudable de Optuna.
+- `optuna_state/hidden_round_v2_best.json`: mejor combinación encontrada.
+- `optuna_state/hidden_round_v2_optimizer.log`: salida del daemon.
+- `optuna_state/hidden_round_v2_optimizer.pid`: PID mientras está activo.
 
 Los resultados se escriben apenas termina cada escenario. Si una corrida se
 interrumpe, los casos ya completados permanecen guardados.
 
 ## 20. Preparar finalmente la entrega
 
-El archivo `hidden_round_best.json` usa variables de entorno para describir la
+El archivo `hidden_round_v2_best.json` usa variables de entorno para describir la
 mejor combinación. Antes de entregar:
 
 1. Repetir el mejor trial con `--run-best`.

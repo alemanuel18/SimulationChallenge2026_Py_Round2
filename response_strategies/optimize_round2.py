@@ -26,11 +26,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 STATE_DIRECTORY = Path(__file__).resolve().parent / "optuna_state"
-DATABASE_PATH = STATE_DIRECTORY / "hidden_round.db"
-BEST_PATH = STATE_DIRECTORY / "hidden_round_best.json"
-LOG_PATH = STATE_DIRECTORY / "hidden_round_optimizer.log"
-PID_PATH = STATE_DIRECTORY / "hidden_round_optimizer.pid"
-STUDY_NAME = "wsc_hidden_round_robust_loss_v1"
+DATABASE_PATH = STATE_DIRECTORY / "hidden_round_v2.db"
+BEST_PATH = STATE_DIRECTORY / "hidden_round_v2_best.json"
+LOG_PATH = STATE_DIRECTORY / "hidden_round_v2_optimizer.log"
+PID_PATH = STATE_DIRECTORY / "hidden_round_v2_optimizer.pid"
+STUDY_NAME = "wsc_hidden_round_robust_loss_v2"
+RESULT_PREFIX = "v2"
+STARTUP_TRIALS = 5
 FAILURE_LOSS = 1_000.0
 
 
@@ -330,12 +332,31 @@ def _create_study(optuna):
         study_name=STUDY_NAME, storage=_storage_url(), direction="minimize",
         load_if_exists=True,
         sampler=optuna.samplers.TPESampler(seed=2026, multivariate=True,
-                                           n_startup_trials=12),
+                                           n_startup_trials=STARTUP_TRIALS),
     )
+    _recover_interrupted_trials(optuna, study)
     if not study.trials:
         study.enqueue_trial(_default_parameters(),
                             user_attrs={"source": "current adaptive defaults"})
     return study
+
+
+def _recover_interrupted_trials(optuna, study):
+    """Fail and requeue trials orphaned by a stopped daemon or reboot."""
+    running = study.get_trials(
+        deepcopy=False,
+        states=(optuna.trial.TrialState.RUNNING,),
+    )
+    for frozen_trial in running:
+        study.tell(frozen_trial.number, state=optuna.trial.TrialState.FAIL)
+        if frozen_trial.params:
+            study.enqueue_trial(
+                frozen_trial.params,
+                user_attrs={
+                    "source": f"recovered interrupted trial {frozen_trial.number}"
+                },
+            )
+        print(f"Recovered interrupted trial {frozen_trial.number}.", flush=True)
 
 
 def _objective_factory(args):
@@ -343,7 +364,8 @@ def _objective_factory(args):
         parameters = _suggest_parameters(trial)
         started = time.perf_counter()
         score, results = evaluate_parameters(
-            parameters, f"trial_{trial.number:06d}", args.workers, args.seed,
+            parameters, f"{RESULT_PREFIX}_trial_{trial.number:06d}",
+            args.workers, args.seed,
             args.warmup_days, args.simulation_days, args.interval_days,
             args.case_timeout_seconds)
         losses = {item["case"]: item["loss"] for item in results}
@@ -470,7 +492,8 @@ def evaluate_stored_trial(args, trial_number=None):
     if trial is None:
         raise SystemExit(f"Trial {trial_number} does not exist")
     score, _ = evaluate_parameters(
-        trial.params, f"rerun_trial_{trial.number:06d}", args.workers, args.seed,
+        trial.params, f"{RESULT_PREFIX}_rerun_trial_{trial.number:06d}",
+        args.workers, args.seed,
         args.warmup_days, args.simulation_days, args.interval_days,
         args.case_timeout_seconds)
     print(f"trial={trial.number} robust_score={score:.6f}")

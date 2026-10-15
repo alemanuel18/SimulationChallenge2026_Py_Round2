@@ -3,11 +3,13 @@ import main as _simulation_main  # noqa: F401 - preserve simulator import order
 import pytest
 
 from response_strategies.optimize_round2 import (
+    STARTUP_TRIALS,
     _default_parameters,
     _environment_from_parameters,
     _loss_from_periods,
     parse_arguments,
     _robust_score,
+    _recover_interrupted_trials,
     _write_case_result,
 )
 
@@ -59,3 +61,27 @@ def test_case_result_is_persisted_before_aggregate_score_exists(tmp_path):
 
 def test_default_case_timeout_is_one_hour():
     assert parse_arguments([]).case_timeout_seconds == 3_600
+
+
+def test_adaptive_sampler_starts_after_five_trials():
+    assert STARTUP_TRIALS == 5
+
+
+def test_interrupted_trial_is_failed_and_requeued():
+    import optuna
+
+    study = optuna.create_study()
+    running = study.ask(
+        fixed_distributions={
+            "wait_fraction": optuna.distributions.FloatDistribution(0.1, 1.5)
+        }
+    )
+    running.suggest_float("wait_fraction", 0.1, 1.5)
+
+    _recover_interrupted_trials(optuna, study)
+
+    states = [trial.state for trial in study.trials]
+    assert states == [
+        optuna.trial.TrialState.FAIL,
+        optuna.trial.TrialState.WAITING,
+    ]
