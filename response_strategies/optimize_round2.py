@@ -1,6 +1,6 @@
 """Robust multi-scenario optimizer for the adaptive hidden-round strategy.
 
-Each candidate is evaluated on ten isolated stress scenarios in parallel. The
+Each candidate is evaluated on nine isolated stress scenarios in parallel. The
 objective penalizes average loss, instability, and the worst case. Generated
 cases, baselines, results, databases and logs remain in ignored directories.
 """
@@ -26,12 +26,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 STATE_DIRECTORY = Path(__file__).resolve().parent / "optuna_state"
-DATABASE_PATH = STATE_DIRECTORY / "hidden_round_v2.db"
-BEST_PATH = STATE_DIRECTORY / "hidden_round_v2_best.json"
-LOG_PATH = STATE_DIRECTORY / "hidden_round_v2_optimizer.log"
-PID_PATH = STATE_DIRECTORY / "hidden_round_v2_optimizer.pid"
-STUDY_NAME = "wsc_hidden_round_robust_loss_v2"
-RESULT_PREFIX = "v2"
+DATABASE_PATH = STATE_DIRECTORY / "hidden_round_v3.db"
+BEST_PATH = STATE_DIRECTORY / "hidden_round_v3_best.json"
+LOG_PATH = STATE_DIRECTORY / "hidden_round_v3_optimizer.log"
+PID_PATH = STATE_DIRECTORY / "hidden_round_v3_optimizer.pid"
+STUDY_NAME = "wsc_hidden_round_robust_loss_v3"
+RESULT_PREFIX = "v3"
 STARTUP_TRIALS = 5
 FAILURE_LOSS = 1_000.0
 
@@ -250,7 +250,7 @@ def _write_case_result(case_root, case_result, run_name, parameters, score=None)
     temporary.replace(result_path)
 
 
-def evaluate_parameters(parameters, run_name, workers=10, seed=2026,
+def evaluate_parameters(parameters, run_name, workers=9, seed=2026,
                         warmup_days=140, simulation_days=360, interval_days=5,
                         timeout_seconds=3600):
     _, case_root, _, load_cases, prepare_cases = _load_scenario_support()
@@ -406,7 +406,7 @@ def run_worker(args):
     PID_PATH.write_text(f"{current_pid}\n", encoding="utf-8")
     study = _create_study(_require_optuna())
     print(f"Starting {STUDY_NAME}; trials={args.trials or 'unlimited'}; "
-          f"cases=10; workers={args.workers}", flush=True)
+          f"cases=9; workers={args.workers}", flush=True)
     try:
         study.optimize(_objective_factory(args), n_trials=args.trials,
                        callbacks=[_write_best], catch=(Exception,), gc_after_trial=True)
@@ -522,7 +522,7 @@ def parse_arguments(argv=None):
     action.add_argument("--run-best", action="store_true")
     action.add_argument("--run-trial", type=int, metavar="NUMBER")
     parser.add_argument("--trials", type=int, default=None)
-    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--workers", type=int, default=9)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--warmup-days", type=int, default=140)
     parser.add_argument("--simulation-days", type=int, default=360)

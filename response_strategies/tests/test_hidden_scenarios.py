@@ -8,11 +8,11 @@ from response_strategies.hidden_scenarios import (
 )
 
 
-def test_prepares_ten_separate_ignored_case_directories(tmp_path):
+def test_prepares_nine_separate_ignored_case_directories(tmp_path):
     manifests = prepare_case_directories(tmp_path)
 
-    assert len(manifests) == 10
-    assert len({path.parent for path in manifests}) == 10
+    assert len(manifests) == 9
+    assert len({path.parent for path in manifests}) == 9
     assert all((path.parent / "results").is_dir() for path in manifests)
     assert [item["id"] for item in load_case_definitions(tmp_path)] == [
         item["id"] for item in CASE_DEFINITIONS
@@ -31,25 +31,18 @@ def test_every_case_builds_paired_baseline_and_disrupted_context():
 
 
 def test_renamed_routes_and_topology_variation_are_material():
-    changed_topology = create_context(CASE_DEFINITIONS[5], include_disruptions=True)
-    renamed = create_context(CASE_DEFINITIONS[6], include_disruptions=True)
+    changed_topology = create_context(CASE_DEFINITIONS[4], include_disruptions=True)
+    renamed = create_context(CASE_DEFINITIONS[5], include_disruptions=True)
 
     assert "S4" not in {route.id for route in changed_topology.initial_service_routes}
     assert all(route.id.startswith("HIDDEN-") for route in renamed.initial_service_routes)
     assert renamed.disruption_plans
 
 
-def test_expensive_cases_keep_useful_but_bounded_pressure():
+def test_expensive_cases_three_and_ten_remain_in_the_bank():
     scarce_fleet = CASE_DEFINITIONS[2]
-    berth_pressure = CASE_DEFINITIONS[3]
-    late_crisis = CASE_DEFINITIONS[9]
+    late_crisis = CASE_DEFINITIONS[8]
 
     assert scarce_fleet["structure"]["demand_scale"] == 1.40
-    assert berth_pressure["id"] == "case_04_moderate_berth_pressure"
-    assert berth_pressure["structure"]["fleet_scale"] == 1.10
-    assert berth_pressure["structure"]["berth_counts"] == {
-        "Shanghai": 2,
-        "Rotterdam": 2,
-        "Los Angeles": 1,
-    }
     assert late_crisis["structure"]["demand_scale"] == 1.18
+    assert not any(item["id"].startswith("case_04") for item in CASE_DEFINITIONS)

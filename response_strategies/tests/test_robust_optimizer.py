@@ -60,7 +60,10 @@ def test_case_result_is_persisted_before_aggregate_score_exists(tmp_path):
 
 
 def test_default_case_timeout_is_one_hour():
-    assert parse_arguments([]).case_timeout_seconds == 3_600
+    arguments = parse_arguments([])
+
+    assert arguments.case_timeout_seconds == 3_600
+    assert arguments.workers == 9
 
 
 def test_adaptive_sampler_starts_after_five_trials():

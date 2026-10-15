@@ -17,7 +17,7 @@ from scenario_builders.baseline_stable_scenario import BaselineStableScenario
 
 
 CASE_ROOT = Path(__file__).resolve().parent / "hidden_round_cases"
-SPEC_VERSION = 2
+SPEC_VERSION = 3
 
 CASE_DEFINITIONS = (
     {
@@ -46,16 +46,6 @@ CASE_DEFINITIONS = (
             {"type": "leg", "route": "S5", "sequence": 4, "start": 42, "duration": 42, "multiplier": 3.0},
             {"type": "port", "port": "New Jersey", "start": 58, "duration": 14},
             {"type": "leg", "route": "S9", "sequence": 3, "start": 61, "duration": 27, "multiplier": 4.0},
-        ],
-    },
-    {
-        "id": "case_04_moderate_berth_pressure",
-        "description": "Moderate fleet growth, reduced berths and short repeated closures.",
-        "structure": {"fleet_scale": 1.10, "berth_counts": {"Shanghai": 2, "Rotterdam": 2, "Los Angeles": 1}},
-        "disruptions": [
-            {"type": "port", "port": "Rotterdam", "start": 35, "duration": 6},
-            {"type": "port", "port": "Shanghai", "start": 126, "duration": 8},
-            {"type": "port", "port": "Los Angeles", "start": 245, "duration": 8},
         ],
     },
     {
