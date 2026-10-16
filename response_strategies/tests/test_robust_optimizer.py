@@ -63,7 +63,7 @@ def test_default_case_timeout_is_one_hour():
     arguments = parse_arguments([])
 
     assert arguments.case_timeout_seconds == 3_600
-    assert arguments.workers == 9
+    assert arguments.workers == 7
 
 
 def test_adaptive_sampler_starts_after_five_trials():

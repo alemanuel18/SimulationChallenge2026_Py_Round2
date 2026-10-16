@@ -8,11 +8,11 @@ from response_strategies.hidden_scenarios import (
 )
 
 
-def test_prepares_nine_separate_ignored_case_directories(tmp_path):
+def test_prepares_seven_separate_ignored_case_directories(tmp_path):
     manifests = prepare_case_directories(tmp_path)
 
-    assert len(manifests) == 9
-    assert len({path.parent for path in manifests}) == 9
+    assert len(manifests) == 7
+    assert len({path.parent for path in manifests}) == 7
     assert all((path.parent / "results").is_dir() for path in manifests)
     assert [item["id"] for item in load_case_definitions(tmp_path)] == [
         item["id"] for item in CASE_DEFINITIONS
@@ -39,10 +39,9 @@ def test_renamed_routes_and_topology_variation_are_material():
     assert renamed.disruption_plans
 
 
-def test_expensive_cases_three_and_ten_remain_in_the_bank():
+def test_expensive_case_three_remains_and_discarded_cases_do_not():
     scarce_fleet = CASE_DEFINITIONS[2]
-    late_crisis = CASE_DEFINITIONS[8]
 
     assert scarce_fleet["structure"]["demand_scale"] == 1.40
-    assert late_crisis["structure"]["demand_scale"] == 1.18
-    assert not any(item["id"].startswith("case_04") for item in CASE_DEFINITIONS)
+    discarded_prefixes = ("case_04", "case_09", "case_10")
+    assert not any(item["id"].startswith(discarded_prefixes) for item in CASE_DEFINITIONS)

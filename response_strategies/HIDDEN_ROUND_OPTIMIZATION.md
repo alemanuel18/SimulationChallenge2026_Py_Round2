@@ -4,7 +4,7 @@ Esta guía explica cómo preparar el entorno, levantar el iterador, consultar su
 progreso, detenerlo y reanudarlo. Todos los comandos deben ejecutarse desde la
 raíz de `SimulationChallenge2026_Py_Round2`.
 
-El banco usa nueve escenarios locales. Cada uno tiene su propia carpeta,
+El banco usa siete escenarios locales. Cada uno tiene su propia carpeta,
 baseline y resultados. Las carpetas generadas, la base de datos de Optuna y
 los logs están ignorados por Git.
 
@@ -13,7 +13,7 @@ los logs están ignorados por Git.
 - Python 3.10 o posterior.
 - Algunos GB libres para la base de datos, baselines y resultados de muchas
   iteraciones. El espacio exacto depende de cuánto tiempo se deje trabajando.
-- Hasta nueve núcleos o hilos para usar `--workers 9`. Puede utilizarse
+- Hasta siete núcleos o hilos para usar `--workers 7`. Puede utilizarse
   una cantidad menor si el equipo tiene menos memoria o CPU.
 - Dependencias declaradas en `requirements.txt`, incluida Optuna.
 
@@ -95,9 +95,9 @@ Antes de iniciar una búsqueda larga:
 .venv/bin/python -m pytest response_strategies/tests -q
 ```
 
-El resultado esperado actualmente es `14 passed`.
+El resultado esperado actualmente es `17 passed`.
 
-## 7. Preparar los nueve escenarios
+## 7. Preparar los siete escenarios
 
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py --prepare-cases
@@ -109,32 +109,34 @@ Esto crea:
 response_strategies/hidden_round_cases/
 ├── case_01_long_ocean_detours/
 ├── case_02_central_hub_closure/
-├── ... (no existe caso 04)
-└── case_10_compound_late_crisis/
+├── case_03_scarce_fleet_high_demand/
+├── ... (no existen los casos 04 ni 09)
+└── case_08_rapid_staggered_shocks/
 ```
 
 Cada carpeta contiene `scenario.json`, sus baselines cacheados y `results/`.
 El comando puede repetirse sin afectar el código entregable.
 
-El caso 04 fue descartado completamente porque tanto su versión extrema como
-la moderada agotaron la hora disponible en todos los trials y no aportaban
-información para distinguir candidatos. Los casos 03 y 10 se mantienen sin
-reducir: cuando terminaron, tardaron aproximadamente 20–32 y 22–42 minutos,
-respectivamente.
+El caso 04 fue descartado porque agotaba la hora disponible sin aportar una
+comparación útil. El caso 09 también se retiró porque devolvía el mismo loss en
+prácticamente todos los trials. El caso 10 se retiró después de acumular 16
+timeouts en 30 trials completos. El caso 02 se conserva: aunque suele devolver
+`83.5527`, también produjo `23.1551`, `28.1400` y `32.3997`, por lo que sí
+distingue configuraciones. El caso 03 también se conserva como prueba exigente.
 
 ## 8. Ejecutar la prueba corta
 
-Antes del iterador completo, verificar que los nueve procesos puedan levantarse:
+Antes del iterador completo, verificar que los siete procesos puedan levantarse:
 
 ```bash
-.venv/bin/python response_strategies/optimize_round2.py --smoke --workers 9
+.venv/bin/python response_strategies/optimize_round2.py --smoke --workers 7
 ```
 
 Esta prueba usa solamente 5 días de calentamiento y 15 días medidos. No busca
 parámetros y no sustituye la evaluación completa. El resultado validado fue:
 
 ```text
-smoke robust_score=-0.046681
+smoke robust_score=-0.046344
 ```
 
 ## 9. Evaluar los parámetros actuales
@@ -144,7 +146,7 @@ Para ejecutar una referencia completa sin iniciar Optuna:
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --evaluate-default \
-  --workers 9
+  --workers 7
 ```
 
 Usa 140 días de calentamiento, 360 días medidos e intervalos de 5 días. Los
@@ -157,7 +159,7 @@ Esta es la forma recomendada para dejarlo trabajando durante varias horas:
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --daemon \
-  --workers 9
+  --workers 7
 ```
 
 Sin `--trials`, la búsqueda no tiene un número máximo de iteraciones. Continúa
@@ -168,7 +170,7 @@ Para ejecutar, por ejemplo, exactamente 20 iteraciones:
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --daemon \
-  --workers 9 \
+  --workers 7 \
   --trials 20
 ```
 
@@ -182,7 +184,7 @@ Esto permite ver los resultados directamente en la terminal:
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --trials 1 \
-  --workers 9
+  --workers 7
 ```
 
 Si se omite `--trials`, también busca indefinidamente, pero la terminal queda
@@ -204,13 +206,13 @@ Muestra:
 - Si el proceso sigue activo.
 - Mejor score robusto.
 - Parámetros de la mejor iteración.
-- Loss de cada uno de los nueve casos.
+- Loss de cada uno de los siete casos.
 - Ruta del archivo de log.
 
 Para observar el log en vivo en Linux o macOS:
 
 ```bash
-tail -f response_strategies/optuna_state/hidden_round_v3_optimizer.log
+tail -f response_strategies/optuna_state/hidden_round_v4_optimizer.log
 ```
 
 Salir de `tail` no detiene el iterador; se sale con `Ctrl+C`.
@@ -231,12 +233,12 @@ Solicitar otra cantidad, por ejemplo 25:
 
 ## 14. Repetir el mejor resultado o una iteración
 
-Volver a ejecutar el mejor conjunto de parámetros en los nueve escenarios:
+Volver a ejecutar el mejor conjunto de parámetros en los siete escenarios:
 
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --run-best \
-  --workers 9
+  --workers 7
 ```
 
 Repetir una iteración concreta, por ejemplo la número 17:
@@ -244,7 +246,7 @@ Repetir una iteración concreta, por ejemplo la número 17:
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --run-trial 17 \
-  --workers 9
+  --workers 7
 ```
 
 Estos comandos requieren que el estudio ya exista.
@@ -262,10 +264,10 @@ Para reanudarlo posteriormente se utiliza el mismo comando inicial:
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --daemon \
-  --workers 9
+  --workers 7
 ```
 
-Optuna abre `hidden_round_v3.db` y continúa el mismo estudio. Los ensayos
+Optuna abre `hidden_round_v4.db` y continúa el mismo estudio. Los ensayos
 terminados y el mejor resultado no se pierden si se cierra la terminal o se
 reinicia el equipo.
 
@@ -285,7 +287,7 @@ Opciones principales:
 
 | Opción | Valor predeterminado | Función |
 |---|---:|---|
-| `--workers` | `9` | Cantidad máxima de escenarios simultáneos. |
+| `--workers` | `7` | Cantidad máxima de escenarios simultáneos. |
 | `--trials` | Sin límite | Número de combinaciones que probará Optuna. |
 | `--seed` | `2026` | Semilla reproducible de las simulaciones. |
 | `--warmup-days` | `140` | Días de calentamiento por simulación. |
@@ -309,7 +311,7 @@ comparables.
 
 ## 17. Cómo se detiene una iteración problemática
 
-Los nueve casos empiezan en paralelo. Cada uno dispone de un máximo de 3,600
+Los siete casos empiezan en paralelo. Cada uno dispone de un máximo de 3,600
 segundos. Si uno o más escenarios superan ese límite:
 
 1. Se conservan los resultados de los casos que terminaron.
@@ -323,7 +325,7 @@ inestable paralice la búsqueda.
 
 ## 18. Cómo se selecciona el mejor candidato
 
-Cada candidato utiliza los mismos parámetros en los nueve escenarios. Su score
+Cada candidato utiliza los mismos parámetros en los siete escenarios. Su score
 es:
 
 ```text
@@ -333,7 +335,7 @@ promedio(loss) + 0.35 × desviación + 0.25 × (peor loss - promedio)
 El último término nunca puede ser negativo. Así se penalizan configuraciones
 que funcionan bien en varios casos, pero fallan gravemente en uno.
 
-El estudio v3 usa cinco trials iniciales para explorar el espacio. Desde el
+El estudio v4 usa cinco trials iniciales para explorar el espacio. Desde el
 sexto trial, el muestreador TPE comienza a proponer parámetros de manera
 adaptativa a partir de los resultados anteriores.
 
@@ -346,21 +348,21 @@ reducción directa de esa cantidad de días.
 - `hidden_round_cases/case_*/scenario.json`: definición de cada caso.
 - `hidden_round_cases/case_*/baseline_*.json`: baseline cacheado.
 - `hidden_round_cases/case_*/results/*.json`: loss, ATT y parámetros.
-- `optuna_state/hidden_round_v3.db`: estudio reanudable de Optuna.
-- `optuna_state/hidden_round_v3_best.json`: mejor combinación encontrada.
-- `optuna_state/hidden_round_v3_optimizer.log`: salida del daemon.
-- `optuna_state/hidden_round_v3_optimizer.pid`: PID mientras está activo.
+- `optuna_state/hidden_round_v4.db`: estudio reanudable de Optuna.
+- `optuna_state/hidden_round_v4_best.json`: mejor combinación encontrada.
+- `optuna_state/hidden_round_v4_optimizer.log`: salida del daemon.
+- `optuna_state/hidden_round_v4_optimizer.pid`: PID mientras está activo.
 
 Los resultados se escriben apenas termina cada escenario. Si una corrida se
 interrumpe, los casos ya completados permanecen guardados.
 
 ## 20. Preparar finalmente la entrega
 
-El archivo `hidden_round_v3_best.json` usa variables de entorno para describir la
+El archivo `hidden_round_v4_best.json` usa variables de entorno para describir la
 mejor combinación. Antes de entregar:
 
 1. Repetir el mejor trial con `--run-best`.
-2. Confirmar que no depende de uno solo de los nueve escenarios.
+2. Confirmar que no depende de uno solo de los siete escenarios.
 3. Incorporar sus valores como defaults en `round2_strategy.py`.
 4. Ejecutar nuevamente las pruebas.
 5. Entregar únicamente los archivos permitidos de `response_strategies`.

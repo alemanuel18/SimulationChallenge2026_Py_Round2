@@ -17,7 +17,7 @@ from scenario_builders.baseline_stable_scenario import BaselineStableScenario
 
 
 CASE_ROOT = Path(__file__).resolve().parent / "hidden_round_cases"
-SPEC_VERSION = 3
+SPEC_VERSION = 4
 
 CASE_DEFINITIONS = (
     {
@@ -86,27 +86,6 @@ CASE_DEFINITIONS = (
             {"type": "port", "port": "Kaohsiung", "start": 149, "duration": 6},
             {"type": "leg", "route": "S7", "sequence": 3, "start": 221, "duration": 8, "multiplier": 8.0},
             {"type": "port", "port": "Cartagena", "start": 305, "duration": 7},
-        ],
-    },
-    {
-        "id": "case_09_asymmetric_regional_demand",
-        "description": "Demand moves toward peripheral ports while feeder links are disturbed.",
-        "structure": {"demand_scale": 0.90, "demand_port_multipliers": {"Jakarta": 2.4, "Laem Chabang": 1.8, "Cartagena": 1.7}, "route_fleet_counts": {"S8": 2, "S3": 1}},
-        "disruptions": [
-            {"type": "port", "port": "Jakarta", "start": 64, "duration": 13},
-            {"type": "leg", "route": "S3", "sequence": 2, "start": 170, "duration": 33, "multiplier": 4.0},
-            {"type": "port", "port": "Cartagena", "start": 274, "duration": 15},
-        ],
-    },
-    {
-        "id": "case_10_compound_late_crisis",
-        "description": "A quiet first half followed by simultaneous late network shocks.",
-        "structure": {"demand_scale": 1.18, "capacity_scale": 0.85, "berth_counts": {"Colombo": 1, "New Jersey": 1}},
-        "disruptions": [
-            {"type": "leg", "route": "S5", "sequence": 4, "start": 205, "duration": 70, "multiplier": 5.0},
-            {"type": "port", "port": "Colombo", "start": 216, "duration": 24},
-            {"type": "leg", "route": "S6", "sequence": 6, "start": 225, "duration": 45, "multiplier": 4.0},
-            {"type": "port", "port": "New Jersey", "start": 252, "duration": 18},
         ],
     },
 )
