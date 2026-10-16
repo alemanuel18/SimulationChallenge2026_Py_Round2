@@ -293,15 +293,15 @@ Opciones principales:
 | `--warmup-days` | `140` | Días de calentamiento por simulación. |
 | `--simulation-days` | `360` | Días medidos por simulación. |
 | `--interval-days` | `5` | Tamaño de cada intervalo del loss. |
-| `--case-timeout-seconds` | `2400` | Máximo de 40 minutos por evaluación paralela. |
+| `--case-timeout-seconds` | `3000` | Máximo de 50 minutos por evaluación paralela. |
 
-Ejemplo con cuatro procesos y máximo de 40 minutos:
+Ejemplo con cuatro procesos y máximo de 50 minutos:
 
 ```bash
 .venv/bin/python response_strategies/optimize_round2.py \
   --daemon \
   --workers 4 \
-  --case-timeout-seconds 2400
+  --case-timeout-seconds 3000
 ```
 
 Reducir `--workers` cambia el tiempo total, pero no la lógica ni los parámetros
@@ -312,10 +312,9 @@ comparables.
 ## 17. Cómo se detiene una iteración problemática
 
 Los siete casos empiezan en paralelo. La evaluación dispone de un máximo de
-2,400 segundos (40 minutos). El historial muestra medianas por caso de 16 a
+3,000 segundos (50 minutos). El historial muestra medianas por caso de 16 a
 20 minutos, aunque algunas corridas tardaron más: el caso 02 llegó a 35 minutos,
-el 03 a 32 y el 08 a 48. Con el nuevo límite, una corrida excepcionalmente lenta
-puede recibir la penalización interna `loss=1000`. Si la evaluación supera el límite:
+el 03 a 32 y el 08 a 48. Si la evaluación supera el límite:
 
 1. Se conservan los resultados de los casos que terminaron.
 2. Los pendientes son detenidos.
