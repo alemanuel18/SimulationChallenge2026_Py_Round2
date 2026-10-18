@@ -32,17 +32,18 @@ from maritime_data_context import Booking, Segment, ServiceRoute
 _BERTHING_DAYS_PER_CALL = 3.0 / 24.0
 _KNOTS_TO_NM_PER_DAY = 24.0
 
-# The expected-time parameters come from the earlier Round 2 search.  The
-# topology and activation decisions below are now derived from the context, so
-# a judging run does not depend on Optuna state or published route names.
-_DEFAULT_WAIT_FRACTION = 0.932682014844758
-_DEFAULT_ESTIMATED_BERTH_CALL_DAYS = 0.2143979900583058
-_DEFAULT_DETOUR_GAIN_RATIO = 5.0
-_DEFAULT_MINIMUM_SAVED_DAYS = 1.0
-_DEFAULT_LEAD_HEADWAY_FACTOR = 1.5
-_DEFAULT_PORT_LEAD_HEADWAY_FACTOR = 0.25
-_DEFAULT_BYPASS_CLOSURE_FRACTION = 0.5
-_DEFAULT_PORT_SKIP_SAVINGS_RATIO = 0.5
+# Best values from hidden-round study v4, trial 28. The strategy remains
+# topology-driven, and these defaults can still be overridden with WSC_* envs.
+_DEFAULT_WAIT_FRACTION = 1.4972942997799819
+_DEFAULT_WAIT_WEIGHT = 1.5294118095553806
+_DEFAULT_ESTIMATED_BERTH_CALL_DAYS = 0.05489952123920504
+_DEFAULT_BERTH_WAIT_WEIGHT = 17591.935473333244
+_DEFAULT_DETOUR_GAIN_RATIO = 0.510671938639319
+_DEFAULT_MINIMUM_SAVED_DAYS = 9.23693584784851
+_DEFAULT_LEAD_HEADWAY_FACTOR = 2.641254353015926
+_DEFAULT_PORT_LEAD_HEADWAY_FACTOR = 1.2655109081440026
+_DEFAULT_BYPASS_CLOSURE_FRACTION = 0.09163724082427123
+_DEFAULT_PORT_SKIP_SAVINGS_RATIO = 0.7936476209918768
 
 
 def _env_float(name, default, minimum=0.0, maximum=100.0):
@@ -363,7 +364,7 @@ def select_vessel_for_berth(
         # Waiting time dominates after a prolonged queue, preventing starvation.
         starvation_weight = _env_float(
             "WSC_BERTH_WAIT_WEIGHT",
-            _adaptive_berth_wait_weight(waiting_vessels),
+            _DEFAULT_BERTH_WAIT_WEIGHT,
             0.0,
             50_000.0,
         )
@@ -506,21 +507,6 @@ def _environment_key(value):
         character if character.isalnum() else "_"
         for character in str(value).upper()
     )
-
-
-def _adaptive_berth_wait_weight(waiting_vessels):
-    capacities = sorted(
-        vessel.vessel_class.teu_capacity
-        for vessel in waiting_vessels
-        if vessel.vessel_class is not None
-        and vessel.vessel_class.teu_capacity > 0
-    )
-    if not capacities:
-        return 1_000.0
-    middle = len(capacities) // 2
-    if len(capacities) % 2:
-        return float(capacities[middle])
-    return (capacities[middle - 1] + capacities[middle]) / 2.0
 
 
 def _find_detour(context, source_route, event):
@@ -952,7 +938,7 @@ def _find_expected_time_path(context, now, origin, destination):
         route_state,
         origin,
         destination,
-        os.environ.get("WSC_WAIT_WEIGHT", "1.0"),
+        os.environ.get("WSC_WAIT_WEIGHT", str(_DEFAULT_WAIT_WEIGHT)),
     )
     path_cache = getattr(context, "_round2_path_cache", None)
     if path_cache is None:
@@ -1115,7 +1101,7 @@ def _detour_route_edges(source_route, detour):
 
 def _expected_edge_days(context, now, elapsed_before_edge, edge):
     route = edge.route
-    wait_weight = _env_float("WSC_WAIT_WEIGHT", 1.0, 0.0, 4.0)
+    wait_weight = _env_float("WSC_WAIT_WEIGHT", _DEFAULT_WAIT_WEIGHT, 0.0, 4.0)
     wait_fraction = _env_float(
         "WSC_WAIT_FRACTION", _DEFAULT_WAIT_FRACTION, 0.0, 1.5
     )
