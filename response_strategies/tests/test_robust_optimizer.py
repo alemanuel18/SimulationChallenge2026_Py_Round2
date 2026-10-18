@@ -67,7 +67,7 @@ def test_default_case_timeout_is_fifty_minutes():
 
 
 def test_adaptive_sampler_starts_after_five_trials():
-    assert STARTUP_TRIALS == 5
+    assert STARTUP_TRIALS == 10
 
 
 def test_interrupted_trial_is_failed_and_requeued():

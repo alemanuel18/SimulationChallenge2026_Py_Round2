@@ -339,9 +339,11 @@ que funcionan bien en varios casos, pero fallan gravemente en uno.
 
 El estudio v5 empieza evaluando como primer trial la mejor combinación de
 parámetros encontrada anteriormente. Su base de datos es nueva y no contiene
-los ensayos con timeout del estudio v4. Luego usa cinco trials iniciales para
-explorar el espacio; desde el sexto, TPE propone parámetros de manera
-adaptativa a partir de los resultados de este estudio limpio.
+los ensayos con timeout del estudio v4. Luego usa diez trials iniciales para
+explorar el espacio; desde el trial número 10 (la corrida 11), TPE propone
+parámetros de manera adaptativa a partir de los resultados de este estudio
+limpio. El trial 0 es
+el mejor conjunto conocido, y los nueve siguientes sirven para explorar.
 
 Un loss negativo significa que el resultado calculado fue negativo porque el
 ATT con estrategia fue menor que el baseline. No representa una

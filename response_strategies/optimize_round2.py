@@ -32,7 +32,7 @@ LOG_PATH = STATE_DIRECTORY / "hidden_round_v5_optimizer.log"
 PID_PATH = STATE_DIRECTORY / "hidden_round_v5_optimizer.pid"
 STUDY_NAME = "wsc_hidden_round_robust_loss_v5"
 RESULT_PREFIX = "v5"
-STARTUP_TRIALS = 5
+STARTUP_TRIALS = 10
 FAILURE_LOSS = 1_000.0
 
 
