@@ -212,7 +212,7 @@ Muestra:
 Para observar el log en vivo en Linux o macOS:
 
 ```bash
-tail -f response_strategies/optuna_state/hidden_round_v4_optimizer.log
+tail -f response_strategies/optuna_state/hidden_round_v5_optimizer.log
 ```
 
 Salir de `tail` no detiene el iterador; se sale con `Ctrl+C`.
@@ -267,7 +267,7 @@ Para reanudarlo posteriormente se utiliza el mismo comando inicial:
   --workers 7
 ```
 
-Optuna abre `hidden_round_v4.db` y continúa el mismo estudio. Los ensayos
+Optuna abre `hidden_round_v5.db` y continúa el mismo estudio. Los ensayos
 terminados y el mejor resultado no se pierden si se cierra la terminal o se
 reinicia el equipo.
 
@@ -337,9 +337,11 @@ promedio(loss) + 0.35 × desviación + 0.25 × (peor loss - promedio)
 El último término nunca puede ser negativo. Así se penalizan configuraciones
 que funcionan bien en varios casos, pero fallan gravemente en uno.
 
-El estudio v4 usa cinco trials iniciales para explorar el espacio. Desde el
-sexto trial, el muestreador TPE comienza a proponer parámetros de manera
-adaptativa a partir de los resultados anteriores.
+El estudio v5 empieza evaluando como primer trial la mejor combinación de
+parámetros encontrada anteriormente. Su base de datos es nueva y no contiene
+los ensayos con timeout del estudio v4. Luego usa cinco trials iniciales para
+explorar el espacio; desde el sexto, TPE propone parámetros de manera
+adaptativa a partir de los resultados de este estudio limpio.
 
 Un loss negativo significa que el resultado calculado fue negativo porque el
 ATT con estrategia fue menor que el baseline. No representa una
@@ -350,17 +352,17 @@ reducción directa de esa cantidad de días.
 - `hidden_round_cases/case_*/scenario.json`: definición de cada caso.
 - `hidden_round_cases/case_*/baseline_*.json`: baseline cacheado.
 - `hidden_round_cases/case_*/results/*.json`: loss, ATT y parámetros.
-- `optuna_state/hidden_round_v4.db`: estudio reanudable de Optuna.
-- `optuna_state/hidden_round_v4_best.json`: mejor combinación encontrada.
-- `optuna_state/hidden_round_v4_optimizer.log`: salida del daemon.
-- `optuna_state/hidden_round_v4_optimizer.pid`: PID mientras está activo.
+- `optuna_state/hidden_round_v5.db`: estudio reanudable de Optuna.
+- `optuna_state/hidden_round_v5_best.json`: mejor combinación encontrada.
+- `optuna_state/hidden_round_v5_optimizer.log`: salida del daemon.
+- `optuna_state/hidden_round_v5_optimizer.pid`: PID mientras está activo.
 
 Los resultados se escriben apenas termina cada escenario. Si una corrida se
 interrumpe, los casos ya completados permanecen guardados.
 
 ## 20. Preparar finalmente la entrega
 
-El archivo `hidden_round_v4_best.json` usa variables de entorno para describir la
+El archivo `hidden_round_v5_best.json` usa variables de entorno para describir la
 mejor combinación. Antes de entregar:
 
 1. Repetir el mejor trial con `--run-best`.

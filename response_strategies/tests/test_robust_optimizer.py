@@ -17,10 +17,10 @@ from response_strategies.optimize_round2 import (
 def test_optimizer_maps_every_current_general_parameter():
     environment = _environment_from_parameters(_default_parameters())
 
-    assert environment["WSC_WAIT_WEIGHT"] == "1.0"
-    assert environment["WSC_LEAD_HEADWAY_FACTOR"] == "1.5"
-    assert environment["WSC_PORT_LEAD_HEADWAY_FACTOR"] == "0.25"
-    assert environment["WSC_DETOUR_GAIN_RATIO"] == "5.0"
+    assert environment["WSC_WAIT_WEIGHT"] == "1.5294118095553806"
+    assert environment["WSC_LEAD_HEADWAY_FACTOR"] == "2.641254353015926"
+    assert environment["WSC_PORT_LEAD_HEADWAY_FACTOR"] == "1.2655109081440026"
+    assert environment["WSC_DETOUR_GAIN_RATIO"] == "0.510671938639319"
     assert not any(name.startswith("WSC_ENABLE_S") for name in environment)
 
 
