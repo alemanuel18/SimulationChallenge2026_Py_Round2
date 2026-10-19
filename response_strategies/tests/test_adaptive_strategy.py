@@ -24,6 +24,7 @@ from response_strategies.round2_strategy import (
     _unique_closed_port_events,
     assign_bookings,
     manage_service_routes,
+    select_vessel_for_berth,
     supports_adaptive_strategy,
 )
 from response_strategies.strategy_validation import (
@@ -58,7 +59,7 @@ def test_detour_decision_uses_gain_instead_of_route_name():
     assert not _has_actionable_strategy(marginal)
 
 
-def test_non_actionable_context_delegates_to_default_strategy():
+def test_non_actionable_context_keeps_generic_booking_and_berth_policies():
     context, _, ports, _ = _network(multiplier=1.1)
     shipment = Shipment(
         index=2,
@@ -67,7 +68,42 @@ def test_non_actionable_context_delegates_to_default_strategy():
     )
 
     assert manage_service_routes(context, dt.datetime.min) is None
-    assert assign_bookings(context, dt.datetime.min, shipment) is None
+    assert assign_bookings(context, dt.datetime.min, shipment)
+    assert shipment.associated_bookings
+
+    selected = select_vessel_for_berth(
+        context,
+        ports[0],
+        context.vessels,
+        dt.datetime.min,
+    )
+    assert selected is context.vessels[0]
+
+
+def test_booking_is_assigned_when_destination_is_closed_and_path_accounts_for_reopening():
+    context, _, ports, _ = _network(multiplier=1.0)
+    destination = ports[1]
+    berth = Berth(index=1, port=destination)
+    destination.berths.append(berth)
+    context.disruption_plans.append(
+        DisruptionPlan(
+            target_berth=berth,
+            start_offset_days=10,
+            duration_days=5,
+            close_berth=True,
+        )
+    )
+    now = dt.datetime.min + dt.timedelta(days=11)
+    shipment = Shipment(
+        index=3,
+        teu_size=1,
+        demand=Demand(origin_port=ports[0], destination_port=destination),
+    )
+
+    assert _closed_port_wait_days(context, destination, now) == 4
+    assert assign_bookings(context, now, shipment)
+    assert shipment.current_booking_index == 1
+    assert shipment.associated_bookings
 
 
 def test_manage_routes_is_idempotent_and_preserves_model_invariants():

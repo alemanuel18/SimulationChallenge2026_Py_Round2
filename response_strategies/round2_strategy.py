@@ -96,7 +96,12 @@ def strategy_mode() -> str:
 
 
 def manage_service_routes(context, now, vessel=None):
-    """Activate worthwhile full-fleet detours or delegate safely to default."""
+    """Activate worthwhile full-fleet detours or leave routes unchanged.
+
+    The actionable-strategy gate applies only to this fleet-reconfiguration
+    decision. Booking and berth policies still run on supported networks even
+    when no detour clears its cost-benefit threshold.
+    """
     if not supports_adaptive_strategy(context):
         return None
     if not _has_actionable_strategy(context):
@@ -286,8 +291,6 @@ def assign_bookings(context, now, shipment):
     """Assign an expected-time-minimising booking chain for any valid network."""
     if not supports_adaptive_strategy(context):
         return None
-    if not _has_actionable_strategy(context):
-        return None
     if strategy_mode() == "suppress":
         return None
 
@@ -300,11 +303,9 @@ def assign_bookings(context, now, shipment):
     if origin is destination:
         return True
 
-    # Cargo whose destination cannot currently handle a vessel is better kept
-    # at origin.  The activity already retries immediately after reopening.
-    if _port_is_closed(context, destination, now):
-        return False
-
+    # The time-dependent edge costs include waiting until a fully closed port
+    # reopens. Keep assigning a route so cargo need not wait at origin solely
+    # because its final destination is closed at this instant.
     path = _find_expected_time_path(context, now, origin, destination)
     if not path:
         return False
@@ -337,7 +338,6 @@ def select_vessel_for_berth(
     """Prioritise TEU-hours already accumulated, with starvation protection."""
     if (
         not supports_adaptive_strategy(context)
-        or not _has_actionable_strategy(context)
         or not waiting_vessels
     ):
         return None
@@ -934,11 +934,18 @@ def _find_expected_time_path(context, now, origin, destination):
         )
     )
     cache_key = (
-        int(math.floor(_absolute_day(now))),
+        round(_absolute_day(now), 8),
         route_state,
         origin,
         destination,
-        os.environ.get("WSC_WAIT_WEIGHT", str(_DEFAULT_WAIT_WEIGHT)),
+        _env_float("WSC_WAIT_FRACTION", _DEFAULT_WAIT_FRACTION, 0.0, 1.5),
+        _env_float("WSC_WAIT_WEIGHT", _DEFAULT_WAIT_WEIGHT, 0.0, 4.0),
+        _env_float(
+            "WSC_ESTIMATED_BERTH_CALL_DAYS",
+            _DEFAULT_ESTIMATED_BERTH_CALL_DAYS,
+            0.0,
+            1.0,
+        ),
     )
     path_cache = getattr(context, "_round2_path_cache", None)
     if path_cache is None:
