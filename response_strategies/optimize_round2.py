@@ -26,12 +26,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 STATE_DIRECTORY = Path(__file__).resolve().parent / "optuna_state"
-DATABASE_PATH = STATE_DIRECTORY / "hidden_round_v5.db"
-BEST_PATH = STATE_DIRECTORY / "hidden_round_v5_best.json"
-LOG_PATH = STATE_DIRECTORY / "hidden_round_v5_optimizer.log"
-PID_PATH = STATE_DIRECTORY / "hidden_round_v5_optimizer.pid"
-STUDY_NAME = "wsc_hidden_round_robust_loss_v5"
-RESULT_PREFIX = "v5"
+DATABASE_PATH = STATE_DIRECTORY / "hidden_round_v6.db"
+BEST_PATH = STATE_DIRECTORY / "hidden_round_v6_best.json"
+LOG_PATH = STATE_DIRECTORY / "hidden_round_v6_optimizer.log"
+PID_PATH = STATE_DIRECTORY / "hidden_round_v6_optimizer.pid"
+STUDY_NAME = "wsc_hidden_round_robust_loss_v6"
+RESULT_PREFIX = "v6"
 STARTUP_TRIALS = 10
 FAILURE_LOSS = 1_000.0
 
@@ -75,7 +75,7 @@ def _suggest_parameters(trial):
 
 
 def _default_parameters():
-    """Warm-start the clean study from the previous best candidate."""
+    """Start the corrected-strategy study from the best v5 candidate."""
     return {
         "wait_fraction": 1.4972942997799819,
         "wait_weight": 1.5294118095553806,
@@ -338,7 +338,7 @@ def _create_study(optuna):
     _recover_interrupted_trials(optuna, study)
     if not study.trials:
         study.enqueue_trial(_default_parameters(),
-                            user_attrs={"source": "best candidate from previous study"})
+                            user_attrs={"source": "best v5 candidate; corrected strategy"})
     return study
 
 

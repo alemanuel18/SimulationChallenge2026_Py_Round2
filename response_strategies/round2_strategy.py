@@ -32,7 +32,7 @@ from maritime_data_context import Booking, Segment, ServiceRoute
 _BERTHING_DAYS_PER_CALL = 3.0 / 24.0
 _KNOTS_TO_NM_PER_DAY = 24.0
 
-# Best values from hidden-round study v4, trial 28. The strategy remains
+# Best values inherited from hidden-round study v5, trial 0. The strategy remains
 # topology-driven, and these defaults can still be overridden with WSC_* envs.
 _DEFAULT_WAIT_FRACTION = 1.4972942997799819
 _DEFAULT_WAIT_WEIGHT = 1.5294118095553806

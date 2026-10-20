@@ -1,5 +1,13 @@
 # Iterador para preparar la ronda oculta
 
+El iterador activo para la estrategia corregida usa el estudio **v6**, separado
+del historial anterior. No borra ni reutiliza la base de datos v5. Su primer
+trial se inicializa con el mejor conjunto de parámetros v5; con
+`STARTUP_TRIALS` en 10, Optuna evalúa diez combinaciones iniciales antes de
+pasar a propuestas adaptativas. El trial sembrado cuenta como una de esas diez.
+El estudio se crea cuando ejecutes el comando de inicio; todavía no hay una
+corrida iniciada.
+
 Esta guía explica cómo preparar el entorno, levantar el iterador, consultar su
 progreso, detenerlo y reanudarlo. Todos los comandos deben ejecutarse desde la
 raíz de `SimulationChallenge2026_Py_Round2`.
@@ -212,7 +220,7 @@ Muestra:
 Para observar el log en vivo en Linux o macOS:
 
 ```bash
-tail -f response_strategies/optuna_state/hidden_round_v5_optimizer.log
+tail -f response_strategies/optuna_state/hidden_round_v6_optimizer.log
 ```
 
 Salir de `tail` no detiene el iterador; se sale con `Ctrl+C`.
@@ -267,7 +275,7 @@ Para reanudarlo posteriormente se utiliza el mismo comando inicial:
   --workers 7
 ```
 
-Optuna abre `hidden_round_v5.db` y continúa el mismo estudio. Los ensayos
+Optuna abre `hidden_round_v6.db` y continúa el mismo estudio. Los ensayos
 terminados y el mejor resultado no se pierden si se cierra la terminal o se
 reinicia el equipo.
 
@@ -337,13 +345,11 @@ promedio(loss) + 0.35 × desviación + 0.25 × (peor loss - promedio)
 El último término nunca puede ser negativo. Así se penalizan configuraciones
 que funcionan bien en varios casos, pero fallan gravemente en uno.
 
-El estudio v5 empieza evaluando como primer trial la mejor combinación de
-parámetros encontrada anteriormente. Su base de datos es nueva y no contiene
-los ensayos con timeout del estudio v4. Luego usa diez trials iniciales para
-explorar el espacio; desde el trial número 10 (la corrida 11), TPE propone
-parámetros de manera adaptativa a partir de los resultados de este estudio
-limpio. El trial 0 es
-el mejor conjunto conocido, y los nueve siguientes sirven para explorar.
+El estudio v6 empieza evaluando como primer trial la mejor combinación de
+parámetros v5, ahora con la estrategia corregida. Usa diez trials iniciales en
+total: ese punto de partida y nueve propuestas de exploración. Después de esos
+diez resultados, TPE comienza a proponer combinaciones adaptativamente según el
+historial v6. La base de datos es nueva; no borra ni mezcla ensayos anteriores.
 
 Un loss negativo significa que el resultado calculado fue negativo porque el
 ATT con estrategia fue menor que el baseline. No representa una
@@ -354,17 +360,17 @@ reducción directa de esa cantidad de días.
 - `hidden_round_cases/case_*/scenario.json`: definición de cada caso.
 - `hidden_round_cases/case_*/baseline_*.json`: baseline cacheado.
 - `hidden_round_cases/case_*/results/*.json`: loss, ATT y parámetros.
-- `optuna_state/hidden_round_v5.db`: estudio reanudable de Optuna.
-- `optuna_state/hidden_round_v5_best.json`: mejor combinación encontrada.
-- `optuna_state/hidden_round_v5_optimizer.log`: salida del daemon.
-- `optuna_state/hidden_round_v5_optimizer.pid`: PID mientras está activo.
+- `optuna_state/hidden_round_v6.db`: estudio reanudable de Optuna.
+- `optuna_state/hidden_round_v6_best.json`: mejor combinación encontrada.
+- `optuna_state/hidden_round_v6_optimizer.log`: salida del daemon.
+- `optuna_state/hidden_round_v6_optimizer.pid`: PID mientras está activo.
 
 Los resultados se escriben apenas termina cada escenario. Si una corrida se
 interrumpe, los casos ya completados permanecen guardados.
 
 ## 20. Preparar finalmente la entrega
 
-El archivo `hidden_round_v5_best.json` usa variables de entorno para describir la
+El archivo `hidden_round_v6_best.json` usa variables de entorno para describir la
 mejor combinación. Antes de entregar:
 
 1. Repetir el mejor trial con `--run-best`.
